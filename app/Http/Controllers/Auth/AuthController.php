@@ -19,21 +19,10 @@ class AuthController extends Controller{
 
     public function register(RegisterRequest $request):JsonResponse{
         try{
-
-            $deviceData = [
-                'device_type' => $request->header('X-Device-Type', 'web'),
-                'device_name' => $request->header('User-Agent') ? explode(' ', $request->header('User-Agent'))[0] : 'Unknown',
-                'ip_address'  => $request->ip(),
-                'user_agent'  => $request->header('User-Agent'),
-            ];
-
-            $result = $this->userService->registerUser($request->validated(), $deviceData);
+            $user = $this->userService->registerUser($request->validated());
             return response()->json([
                 'message'       => 'Đăng kí tài khoản thành công',
-                'access_token'  => $result['access_token'],  // Trả về cho Frontend lưu ở Cookie/LocalStorage
-                'refresh_token' => $result['refresh_token'], 
-                'token_type'    => 'Bearer',
-                'data'          => $result['user']->load('profile', 'preference')
+                'data'          =>  $user->load('profile','preference')
             ],201);
         }catch(\Throwable $e){ 
             return response()->json([
@@ -70,6 +59,38 @@ class AuthController extends Controller{
                 'message' => 'Lỗi xác thực tài khoản !',
                 'error' => $e->getMessage()
             ],500);
+        }
+    }
+
+    public function login(Request $request){
+        try{
+            $creadential = $request->validate([
+                'email' => 'required|email',
+                'password' => 'required|string'
+            ]);
+
+            $deviceData = [
+                'device_type' => $request->header('X-Device-Type', 'web'),
+                'device_name' => $request->header('User-Agent') ? explode(' ', $request->header('User-Agent'))[0] : 'Unknown',
+                'ip_address'  => $request->ip(),
+                'user_agent'  => $request->header('User-Agent'),
+            ];
+
+            $result = $this->userService->loginUser($creadential,$deviceData);
+
+            return response()->json([
+                'message'       => 'Đăng nhập thành công!',
+                'access_token'  => $result['access_token'],
+                'refresh_token' => $result['refresh_token'],
+                'token_type'    => 'Bearer',
+                'data'          => $result['user']->load('profile', 'preference')
+            ], 200);
+
+        }catch(\Throwable $e){
+            return response()->json([
+                'message' => 'Đăng nhập thất bại !',
+                'error' => $e->getMessage()
+            ]);
         }
     }
 }
