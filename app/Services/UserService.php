@@ -71,7 +71,18 @@ class UserService
         $accessToken = Str::random(60);
         $refreshToken = Str::random(60);
 
-        $user->sessions()->create([
+        $existsingSesstions = $user->session()->where(
+            'user_agent',$deviceData['user_agent']
+        )->first();
+
+        if($existsingSesstions){
+            $existsingSesstions->update([
+                'refresh_token_hash' => hash('sha256', $refreshToken),
+                'ip_address'=> $deviceData['ip_address'],
+                'expired_at' => now()->addDays(30)
+            ]);
+        }else{
+             $user->sessions()->create([
             'id'                 => (string) Str::uuid(),
             'refresh_token_hash' => hash('sha256', $refreshToken),
             'device_type'        => $deviceData['device_type'],
@@ -80,8 +91,8 @@ class UserService
             'user_agent'         => $deviceData['user_agent'],
             'expired_at'         => now()->addDays(30),
             'created_at'         => now()
-        ]);
-
+            ]);
+        }
         return [
             'user'          => $user,
             'access_token'  => $accessToken,
