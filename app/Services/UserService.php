@@ -71,7 +71,7 @@ class UserService
         $accessToken = Str::random(60);
         $refreshToken = Str::random(60);
 
-        $existsingSesstions = $user->session()->where(
+        $existsingSesstions = $user->sessions()->where(
             'user_agent',$deviceData['user_agent']
         )->first();
 

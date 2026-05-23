@@ -40,6 +40,8 @@ COPY ./docker/supervisord.conf /etc/supervisord.conf
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'sed -i "s/LISTEN_PORT/${PORT}/g" /etc/nginx/nginx.conf' >> /usr/local/bin/start.sh && \
     echo 'php /var/www/html/artisan migrate --force' >> /usr/local/bin/start.sh && \
+    echo 'chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache' >> /usr/local/bin/start.sh && \
+    echo 'chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache' >> /usr/local/bin/start.sh && \
     echo 'exec supervisord -c /etc/supervisord.conf' >> /usr/local/bin/start.sh && \
     chmod +x /usr/local/bin/start.sh
 
