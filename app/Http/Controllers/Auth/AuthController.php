@@ -90,7 +90,7 @@ class AuthController extends Controller{
             return response()->json([
                 'message' => 'Đăng nhập thất bại !',
                 'error' => $e->getMessage()
-            ]);
+            ],401);
         }
     }
 }
