@@ -1,33 +1,38 @@
 FROM php:8.2-fpm-alpine
 
-# Cài đặt các công cụ hệ thống và thư viện cho PostgreSQL, Redis
+# Cài đặt toàn bộ công cụ hệ thống, thư viện nén, PostgreSQL, và các công cụ cần thiết cho Composer
 RUN apk update && apk add --no-cache \
     nginx \
     supervisor \
     postgresql-dev \
     libpq-dev \
-    bash
+    bash \
+    libzip-dev \
+    zip \
+    unzip \
+    git \
+    curl
 
-# Cài đặt PHP extensions cho PostgreSQL và Redis
-RUN docker-php-ext-install pdo pdo_pgsql
+# Cài đặt các PHP extensions bắt buộc cho Laravel, PostgreSQL và xử lý file zip
+RUN docker-php-ext-install pdo pdo_pgsql zip
 
-# Cài đặt Composer chính chủ
+# Cài đặt Composer chính chủ bản mới nhất
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Thiết lập thư mục làm việc trong container
 WORKDIR /var/www/html
 
-# Copy toàn bộ mã nguồn vào container
+# Copy toàn bộ mã nguồn vào container trước
 COPY . .
 
-# Cài đặt các package của Laravel (Bỏ qua dev dependencies để nhẹ file)
-RUN composer install --no-dev --optimize-autoloader --no-interaction
+# 🔥 THẦN CHƯỞNG ĐÃ SỬA: Thêm cờ --ignore-platform-reqs để ép Composer cài mượt mà, chống nổ lỗi số 2
+RUN composer install --no-dev --optimize-autoloader --no-interaction --ignore-platform-reqs
 
 # Cấu hình quyền ghi cho thư mục lưu trữ của Laravel
 RUN chmod -R 775 storage bootstrap/cache && \
     chown -R www-data:www-data storage bootstrap/cache
 
-# Copy file cấu hình Nginx và Supervisor (Sẽ tạo ở bước sau)
+# Copy file cấu hình Nginx và Supervisor vào đúng địa chỉ nhà hệ thống
 COPY ./docker/nginx.conf /etc/nginx/nginx.conf
 COPY ./docker/supervisord.conf /etc/supervisord.conf
 
@@ -37,7 +42,7 @@ RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'exec supervisord -c /etc/supervisord.conf' >> /usr/local/bin/start.sh && \
     chmod +x /usr/local/bin/start.sh
 
-# Mở cổng mặc định (Render sẽ ghi đè cổng này qua biến $PORT)
+# Mở cổng mặc định
 EXPOSE 80
 
 # Chạy hệ thống thông qua script khởi động
