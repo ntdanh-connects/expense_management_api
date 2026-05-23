@@ -39,6 +39,7 @@ COPY ./docker/supervisord.conf /etc/supervisord.conf
 # Render cấp cổng PORT ngẫu nhiên, ta cần script để bind cổng này vào Nginx
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'sed -i "s/LISTEN_PORT/${PORT}/g" /etc/nginx/nginx.conf' >> /usr/local/bin/start.sh && \
+    echo 'php /var/www/html/artisan migrate --force' >> /usr/local/bin/start.sh && \
     echo 'exec supervisord -c /etc/supervisord.conf' >> /usr/local/bin/start.sh && \
     chmod +x /usr/local/bin/start.sh
 
