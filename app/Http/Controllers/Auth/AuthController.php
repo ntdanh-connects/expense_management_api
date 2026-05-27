@@ -93,4 +93,29 @@ class AuthController extends Controller{
             ],401);
         }
     }
+
+    public function refreshToken(Request $request){
+        try{
+            $request->validate([
+                'user_id' => 'required|uuid',
+                'refresh_token' => 'required|string'
+            ]);
+
+            $result = $this->userService->refreshToken($request->user_id,$request->refresh_token);
+
+            return response()->json([
+                'status'        => 'success',
+                'message'       => 'Gia hạn phiên làm việc mới thành công!',
+                'access_token'  => $result['access_token'],
+                'refresh_token' => $result['refresh_token'],
+                'token_type'    => 'Bearer',
+                'data'          => $result['user']->load('profile', 'preference')
+            ]);
+        }catch (\Throwable $e){
+            return response()->json([
+                'status'  => 'error',
+                'message' => $e->getMessage()
+            ], 401);
+        }
+    }
 }
