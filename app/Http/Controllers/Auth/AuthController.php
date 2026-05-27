@@ -118,4 +118,27 @@ class AuthController extends Controller{
             ], 401);
         }
     }
+
+    public function getProfile(Request $request)
+    {
+        try {
+           $userId = $request->input('user_id') 
+                      ?? $request->attributes->get('user_id') 
+                      ?? $request->header('X-User-Id');
+
+            $user = $this->userService->getUserProfile($userId);
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Lấy dữ liệu đồng bộ Profile thành công!',
+                'data'    => $user
+            ], 200);
+
+        } catch (\Throwable $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
 }
