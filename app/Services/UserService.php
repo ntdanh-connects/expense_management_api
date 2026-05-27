@@ -125,4 +125,19 @@ class UserService
             'refresh_token' => $newRefreshToken
         ];
     }
+
+    public function getUserProfile(string $userId)
+    {
+        $user = $this->userRepository->findWithRelations($userId);
+
+        if (!$user) {
+            throw new \Exception("Không tìm thấy thông tin người dùng trong hệ thống!");
+        }
+
+        if ($user->status === 'suspended') {
+            throw new \Exception("Tài khoản của bạn đã bị khóa, vui lòng liên hệ ban quản trị!");
+        }
+
+        return $user;
+    }
 }
