@@ -8,3 +8,4 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::get('/verify-email/{id}/{hash}', [AuthController::class, 'verify'])
     ->name('verification.verify');
 Route::post('/login',[AuthController::class, 'login']);
+Route::post('/refresh-token', [AuthController::class, 'refreshToken']);

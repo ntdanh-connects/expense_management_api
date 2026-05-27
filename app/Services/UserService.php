@@ -71,12 +71,12 @@ class UserService
         $accessToken = Str::random(60);
         $refreshToken = Str::random(60);
 
-        $existsingSesstions = $user->session()->where(
-            'user_agent',$deviceData['user_agent']
+        $existingSession = $user->sessions()->where(
+            'user_agent', $deviceData['user_agent']
         )->first();
 
-        if($existsingSesstions){
-            $existsingSesstions->update([
+        if($existingSession){
+            $existingSession->update([
                 'refresh_token_hash' => hash('sha256', $refreshToken),
                 'ip_address'=> $deviceData['ip_address'],
                 'expired_at' => now()->addDays(30)
@@ -97,6 +97,32 @@ class UserService
             'user'          => $user,
             'access_token'  => $accessToken,
             'refresh_token' => $refreshToken
+        ];
+    }
+
+    public function refreshToken(string $userId, string $refreshToken){
+        $hashedToken = hash('sha256',$refreshToken);
+
+        $session = $this->userRepository->findSessionbyToken($userId,$hashedToken);
+
+        if(!$session){
+            throw new \Exception("Phiên làm việc đã hết hạn hoặc mã xác thực không hợp lệ, vui lòng đăng nhập lại!");
+        }
+
+        $newAccessToken = Str::random(60);
+        $newRefreshToken = Str::random(60);
+
+        DB::table('user_sessions')->where('id',$session->id)->update([
+            'refresh_token_hash' => hash('sha256',$newRefreshToken),
+            'expired_at'=> now()->addDays(30)
+        ]);
+
+        $user = $this->userRepository->find($userId);
+
+        return [
+            'user'=> $user,
+            'access_token' => $newAccessToken,
+            'refresh_token' => $newRefreshToken
         ];
     }
 }
