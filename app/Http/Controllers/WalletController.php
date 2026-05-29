@@ -17,9 +17,7 @@ class WalletController extends Controller {
     public function index(Request $request)
     {
         try {
-            $userId = $request->input('user_id') 
-                      ?? $request->attributes->get('user_id') 
-                      ?? $request->header('X-User-Id');
+           $userId = $request->attributes->get('user_id');
             
             if (!$userId) {
                 return response()->json(['status' => 'error', 'message' => 'Vui lòng truyền user_id vào request!'], 400);
@@ -41,9 +39,7 @@ class WalletController extends Controller {
     public function store(Request $request)
     {
         try {
-            $userId = $request->input('user_id') 
-                      ?? $request->attributes->get('user_id') 
-                      ?? $request->header('X-User-Id');
+            $userId = $request->attributes->get('user_id');
 
             if (!$userId) {
                 return response()->json(['status' => 'error', 'message' => 'Vui lòng truyền user_id vào request!'], 400);
@@ -76,9 +72,7 @@ class WalletController extends Controller {
     public function update(Request $request, $id)
     {
         try {
-            $userId = $request->input('user_id') 
-                      ?? $request->attributes->get('user_id') 
-                      ?? $request->header('X-User-Id');
+            $userId = $request->attributes->get('user_id');
 
             if (!$userId) {
                 return response()->json(['status' => 'error', 'message' => 'Vui lòng truyền user_id vào request!'], 400);
@@ -108,9 +102,7 @@ class WalletController extends Controller {
     public function destroy(Request $request, $id)
     {
         try {
-            $userId = $request->input('user_id') 
-                      ?? $request->attributes->get('user_id') 
-                      ?? $request->header('X-User-Id');
+            $userId = $request->attributes->get('user_id');
 
             if (!$userId) {
                 return response()->json(['status' => 'error', 'message' => 'Vui lòng truyền user_id vào request!'], 400);
