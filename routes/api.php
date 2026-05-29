@@ -14,5 +14,5 @@ Route::get('/user/profile', [AuthController::class, 'getProfile']);
 //Wallet
 Route::get('/wallets', [WalletController::class, 'index']);
 Route::post('/wallets', [WalletController::class, 'store']);
-Route::put('/wallets/{id}', [WalletController::class, 'update']);
+Route::post('/wallets/{id}', [WalletController::class, 'update']);
 Route::delete('/wallets/{id}', [WalletController::class, 'destroy']);
