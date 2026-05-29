@@ -72,7 +72,7 @@ class WalletController extends Controller {
         }
     }
 
-    //API 3: PUT /api/wallets/{id} (Sửa cấu hình ví)
+    //API 3: POST /api/wallets/{id} (Sửa cấu hình ví)
     public function update(Request $request, $id)
     {
         try {
