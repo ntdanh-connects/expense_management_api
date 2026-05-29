@@ -39,7 +39,8 @@ CREATE TYPE "source_type" AS ENUM (
   'manual',
   'recurring',
   'transfer',
-  'import'
+  'import',
+  'adjustment'
 );
 
 CREATE TYPE "recurring_frequency" AS ENUM (
