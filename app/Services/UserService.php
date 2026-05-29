@@ -78,6 +78,7 @@ class UserService
         if($existingSession){
             $existingSession->update([
                 'refresh_token_hash' => hash('sha256', $refreshToken),
+                'access_token_hash'  => hash('sha256', $accessToken),
                 'ip_address'=> $deviceData['ip_address'],
                 'expired_at' => now()->addDays(30)
             ]);
@@ -85,6 +86,7 @@ class UserService
              $user->sessions()->create([
             'id'                 => (string) Str::uuid(),
             'refresh_token_hash' => hash('sha256', $refreshToken),
+            'access_token_hash'  => hash('sha256', $accessToken),
             'device_type'        => $deviceData['device_type'],
             'device_name'        => $deviceData['device_name'],
             'ip_address'         => $deviceData['ip_address'],
@@ -114,6 +116,7 @@ class UserService
 
         DB::table('user_sessions')->where('id',$session->id)->update([
             'refresh_token_hash' => hash('sha256',$newRefreshToken),
+            'access_token_hash'  => hash('sha256',$newAccessToken),
             'expired_at'=> now()->addDays(30)
         ]);
 
