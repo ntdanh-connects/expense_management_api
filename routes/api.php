@@ -10,6 +10,8 @@ Route::get('/verify-email/{id}/{hash}', [AuthController::class, 'verify'])
     ->name('verification.verify');
 Route::post('/login',[AuthController::class, 'login']);
 Route::post('/refresh-token', [AuthController::class, 'refreshToken']);
+Route::post('/auth/social', [AuthController::class, 'socialLogin']);
+Route::post('/auth/link-social', [AuthController::class, 'linkSocial']);
 Route::get('/user/profile', [AuthController::class, 'getProfile']);
 //Wallet
 Route::middleware(['custom.auth'])->group(function () {

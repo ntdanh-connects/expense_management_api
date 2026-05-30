@@ -14,7 +14,7 @@ class User extends Authenticatable {
     public $incrementing = false;
     protected $keyType = 'string';
 
-    protected $fillable = ['user_id', 'email', 'status', 'email_verified_at'];
+    protected $fillable = ['user_id', 'email', 'status', 'email_verified_at', 'google_id', 'github_id'];
 
     public function credential()
     {

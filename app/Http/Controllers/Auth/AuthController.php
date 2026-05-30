@@ -141,4 +141,81 @@ class AuthController extends Controller{
             ], 400);
         }
     }
+
+    public function socialLogin(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'provider' => 'required|string',
+                'token'    => 'required|string'
+            ]);
+
+            $deviceData = [
+                'device_type' => $request->header('X-Device-Type', 'web'),
+                'device_name' => $request->header('User-Agent') ? explode(' ', $request->header('User-Agent'))[0] : 'Unknown',
+                'ip_address'  => $request->ip(),
+                'user_agent'  => $request->header('User-Agent'),
+            ];
+
+            $result = $this->userService->socialLogin($validated['provider'], $validated['token'], $deviceData);
+
+            if (isset($result['status']) && $result['status'] === 'requires_linking') {
+                return response()->json([
+                    'status'     => 'requires_linking',
+                    'message'    => $result['message'],
+                    'link_token' => $result['link_token'],
+                    'email'      => $result['email']
+                ], 200);
+            }
+
+            return response()->json([
+                'status'        => 'success',
+                'message'       => 'Đăng nhập mạng xã hội thành công!',
+                'access_token'  => $result['access_token'],
+                'refresh_token' => $result['refresh_token'],
+                'token_type'    => 'Bearer',
+                'data'          => $result['user']->load('profile', 'preference')
+            ], 200);
+
+        } catch (\Throwable $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+    public function linkSocial(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'link_token' => 'required|string',
+                'password'   => 'required|string'
+            ]);
+
+            $deviceData = [
+                'device_type' => $request->header('X-Device-Type', 'web'),
+                'device_name' => $request->header('User-Agent') ? explode(' ', $request->header('User-Agent'))[0] : 'Unknown',
+                'ip_address'  => $request->ip(),
+                'user_agent'  => $request->header('User-Agent'),
+            ];
+
+            $result = $this->userService->linkSocialAccount($validated['link_token'], $validated['password'], $deviceData);
+
+            return response()->json([
+                'status'        => 'success',
+                'message'       => 'Liên kết và xác thực tài khoản thành công!',
+                'access_token'  => $result['access_token'],
+                'refresh_token' => $result['refresh_token'],
+                'token_type'    => 'Bearer',
+                'data'          => $result['user']->load('profile', 'preference')
+            ], 200);
+
+        } catch (\Throwable $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
 }
