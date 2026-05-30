@@ -325,8 +325,26 @@ class UserService
         }
 
         if ($provider === 'github') {
+            $accessToken = $token;
+
+            // Nếu token là mã authorization code (không phải access token định dạng gho_ hay ghp_)
+            if (!str_starts_with($token, 'gho_') && !str_starts_with($token, 'ghp_') && strlen($token) < 30) {
+                // Thực hiện quy đổi mã Code lấy Access Token từ máy chủ GitHub bảo mật
+                $exchangeResponse = Http::asJson()->acceptJson()->post("https://github.com/login/oauth/access_token", [
+                    'client_id' => config('services.github.client_id'),
+                    'client_secret' => config('services.github.client_secret'),
+                    'code' => $token,
+                ]);
+
+                if ($exchangeResponse->successful() && $exchangeResponse->json('access_token')) {
+                    $accessToken = $exchangeResponse->json('access_token');
+                } else {
+                    throw new \Exception("Không thể quy đổi GitHub Auth Code lấy Access Token: " . ($exchangeResponse->json('error_description') ?? "Lỗi không xác định"));
+                }
+            }
+
             // GitHub sử dụng Access Token để lấy user info
-            $response = Http::withToken($token)->get("https://api.github.com/user");
+            $response = Http::withToken($accessToken)->get("https://api.github.com/user");
             
             if ($response->failed()) {
                 throw new \Exception("Token GitHub không hợp lệ hoặc đã hết hạn!");
@@ -336,7 +354,7 @@ class UserService
             
             // Trường hợp email bị ẩn (private) trên GitHub
             if (!$email) {
-                $emailsResponse = Http::withToken($token)->get("https://api.github.com/user/emails");
+                $emailsResponse = Http::withToken($accessToken)->get("https://api.github.com/user/emails");
                 if ($emailsResponse->successful()) {
                     foreach ($emailsResponse->json() as $emailData) {
                         if ($emailData['primary'] && $emailData['verified']) {
