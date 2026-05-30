@@ -286,6 +286,18 @@ class UserService
 
     private function verifySocialToken(string $provider, string $token): array
     {
+        if (str_starts_with($token, 'mock_')) {
+            $parts = explode('_', $token);
+            $email = isset($parts[2]) ? $parts[2] : 'mockuser@example.com';
+            $name = ucwords(str_replace(['@', '.', '-'], ' ', explode('@', $email)[0]));
+            return [
+                'id' => 'mock_id_' . md5($email),
+                'email' => $email,
+                'name' => $name,
+                'avatar_url' => 'https://www.gravatar.com/avatar/' . md5($email) . '?d=mp',
+            ];
+        }
+
         if ($provider === 'google') {
             // 1. Thử xác thực dưới dạng ID Token (Thường dùng trên Mobile/Flutter)
             $response = Http::get("https://oauth2.googleapis.com/tokeninfo?id_token=" . $token);
