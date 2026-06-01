@@ -477,7 +477,7 @@ class UserService
                 $this->imageUploadService->deleteFromS3($oldAvatarUrl);
             }
 
-            return $profile;
+            return $user->load('profile', 'preference');
         });
     }
 
