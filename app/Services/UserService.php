@@ -497,12 +497,11 @@ class UserService
                 throw new \Exception("Không tìm thấy hồ sơ người dùng tương ứng!");
             }
 
-            // Cập nhật họ tên mới
             $profile->update([
                 'full_name' => $data['full_name']
             ]);
 
-            return $profile;
+            return $user->load('profile', 'preference');
         });
     }
 }
