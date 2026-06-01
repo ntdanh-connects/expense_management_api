@@ -14,7 +14,9 @@ Route::post('/auth/social', [AuthController::class, 'socialLogin']);
 Route::post('/auth/link-social', [AuthController::class, 'linkSocial']);
 // Wallet and Protected User routes
 Route::middleware(['custom.auth'])->group(function () {
+    // Wallet and Protected User routes
     Route::get('/user/profile', [AuthController::class, 'getProfile']);
+    Route::post('/user/avatar', [AuthController::class, 'updateAvatar']);
     Route::get('/wallets', [WalletController::class, 'index']);
     Route::post('/wallets', [WalletController::class, 'store']);
     Route::post('/wallets/{id}', [WalletController::class, 'update']);

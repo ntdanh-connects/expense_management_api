@@ -261,4 +261,39 @@ class AuthController extends Controller{
             ],500);
         }
     }
+
+    /**
+     * API Cập nhật ảnh đại diện lên AWS S3
+     */
+    public function updateAvatar(Request $request): JsonResponse
+    {
+        $request->validate([
+            'avatar' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048' // Tối đa 2MB
+        ]);
+
+        try {
+            $userId = $request->attributes->get('user_id')
+                    ?? $request->header('X-User-Id');
+
+            if (!$userId) {
+                throw new \Exception("Không thể xác định danh tính người dùng!");
+            }
+
+            $file = $request->file('avatar');
+            $profile = $this->userService->updateAvatar($userId, $file);
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Cập nhật ảnh đại diện lên đám mây S3 thành công!',
+                'data'    => $profile
+            ], 200);
+
+        } catch (\Throwable $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Cập nhật ảnh đại diện thất bại!',
+                'error'   => $e->getMessage()
+            ], 500);
+        }
+    }
 }

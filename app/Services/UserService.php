@@ -9,16 +9,19 @@ use Illuminate\Support\Str;
 use App\Notifications\Auth\VerifyEmailNotification;
 use Exception;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Http\UploadedFile;
 
 use function Illuminate\Support\now;
 
 class UserService
 {
     protected $userRepository;
+    protected $imageUploadService;
 
-    public function __construct(UserRepositoryInterface $userRepository)
+    public function __construct(UserRepositoryInterface $userRepository, ImageUploadService $imageUploadService)
     {
         $this->userRepository = $userRepository;
+        $this->imageUploadService = $imageUploadService;
     }
 
     public function registerUser(array $data)
@@ -440,5 +443,41 @@ class UserService
         ->update([
             'revoked_at' => now()
         ]);
+    }
+
+    /**
+     * Cập nhật ảnh đại diện lên S3 và cập nhật URL vào user_profiles
+     */
+    public function updateAvatar(string $userId, UploadedFile $file)
+    {
+        return DB::transaction(function () use ($userId, $file) {
+            // 1. Tìm thông tin profile của user
+            $user = $this->userRepository->find($userId);
+            if (!$user) {
+                throw new \Exception("Không tìm thấy thông tin người dùng!");
+            }
+            
+            $profile = $user->profile;
+            if (!$profile) {
+                throw new \Exception("Không tìm thấy thông tin hồ sơ của người dùng!");
+            }
+
+            $oldAvatarUrl = $profile->avatar_url;
+
+            // 2. Upload ảnh mới lên S3
+            $newAvatarUrl = $this->imageUploadService->uploadToS3($file, 'avatars');
+
+            // 3. Cập nhật vào DB
+            $profile->update([
+                'avatar_url' => $newAvatarUrl
+            ]);
+
+            // 4. Xóa ảnh cũ trên S3 để tối ưu dung lượng (nếu có)
+            if ($oldAvatarUrl) {
+                $this->imageUploadService->deleteFromS3($oldAvatarUrl);
+            }
+
+            return $profile;
+        });
     }
 }
