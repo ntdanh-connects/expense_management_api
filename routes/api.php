@@ -12,11 +12,15 @@ Route::post('/login',[AuthController::class, 'login']);
 Route::post('/refresh-token', [AuthController::class, 'refreshToken']);
 Route::post('/auth/social', [AuthController::class, 'socialLogin']);
 Route::post('/auth/link-social', [AuthController::class, 'linkSocial']);
-Route::get('/user/profile', [AuthController::class, 'getProfile']);
-//Wallet
+// Wallet and Protected User routes
 Route::middleware(['custom.auth'])->group(function () {
+    Route::get('/user/profile', [AuthController::class, 'getProfile']);
     Route::get('/wallets', [WalletController::class, 'index']);
     Route::post('/wallets', [WalletController::class, 'store']);
     Route::post('/wallets/{id}', [WalletController::class, 'update']);
     Route::delete('/wallets/{id}', [WalletController::class, 'destroy']);
+
+    //Logut and logout all
+    Route::post('/logout',[AuthController::class, 'logout']);
+    Route::post('/logout-all',[AuthController::class, 'logoutAllDevices']);
 });

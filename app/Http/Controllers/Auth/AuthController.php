@@ -218,4 +218,47 @@ class AuthController extends Controller{
             ], 400);
         }
     }
+
+    function logout(Request $request):JsonResponse{
+        try{
+            $token = $request->bearerToken();
+            
+            if($token){
+                $this->userService->logoutCurrentDevice($token);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Đăng xuất thiết bị hiện tại thành công!'
+            ],200);
+        }catch(\Throwable $e){
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Đăng xuất thất bại!',
+                'error' => $e->getMessage()
+            ],500);
+        }
+    }
+
+    function logoutAllDevices(Request $request):JsonResponse{
+        try{
+            $userId = $request->attributes->get('user_id')
+                    ?? $request->header('X-User-Id');
+
+            if($userId){
+                $this->userService->logoutAllDevices($userId);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Đăng xuất và thu hồi phiên đăng nhập trên toàn bộ thiết bị thành công!'
+            ],200);
+        }catch(\Throwable $e){
+            return response()->json([
+                'status'=>'error',
+                'message'=>'Đăng xuất và thu hồi phiên đăng nhập tất cả thiết bị thất bại',
+                'error'=>$e->getMessage()
+            ],500);
+        }
+    }
 }

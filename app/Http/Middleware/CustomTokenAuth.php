@@ -25,7 +25,7 @@ class CustomTokenAuth
         // 2. Đối chiếu access_token_hash trong DB
         $session = DB::table('user_sessions')
             ->where('access_token_hash', hash('sha256', $token)) 
-            ->where('expired_at', '>', now())                  
+            ->where('access_token_expired_at', '>', now())                  
             ->whereNull('revoked_at')                       
             ->first();
 
