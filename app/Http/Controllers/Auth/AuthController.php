@@ -296,4 +296,38 @@ class AuthController extends Controller{
             ], 500);
         }
     }
+
+    /**
+     * API Cập nhật thông tin cá nhân (Họ tên)
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'full_name' => 'required|string|max:255'
+        ]);
+
+        try {
+            $userId = $request->attributes->get('user_id')
+                    ?? $request->header('X-User-Id');
+
+            if (!$userId) {
+                throw new \Exception("Không thể xác định danh tính người dùng!");
+            }
+
+            $profile = $this->userService->updateProfile($userId, $validated);
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Cập nhật họ tên thành công!',
+                'data'    => $profile
+            ], 200);
+
+        } catch (\Throwable $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Cập nhật họ tên thất bại!',
+                'error'   => $e->getMessage()
+            ], 500);
+        }
+    }
 }

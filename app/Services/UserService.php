@@ -480,4 +480,29 @@ class UserService
             return $profile;
         });
     }
+
+    /**
+     * Cập nhật thông tin cá nhân (họ tên) của người dùng
+     */
+    public function updateProfile(string $userId, array $data)
+    {
+        return DB::transaction(function () use ($userId, $data) {
+            $user = $this->userRepository->find($userId);
+            if (!$user) {
+                throw new \Exception("Không tìm thấy thông tin người dùng!");
+            }
+
+            $profile = $user->profile;
+            if (!$profile) {
+                throw new \Exception("Không tìm thấy hồ sơ người dùng tương ứng!");
+            }
+
+            // Cập nhật họ tên mới
+            $profile->update([
+                'full_name' => $data['full_name']
+            ]);
+
+            return $profile;
+        });
+    }
 }
