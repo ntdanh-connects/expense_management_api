@@ -28,7 +28,7 @@ class ImageUploadService
 
         if (!empty($s3Key) && !empty($s3Secret) && !empty($s3Bucket)) {
             // 2. Upload file lên S3
-            Storage::disk('s3')->put($path, file_get_contents($file));
+            Storage::disk('s3')->put($path, file_get_contents($file->getRealPath()));
 
             // 3. Trả về URL đầy đủ trỏ tới ảnh trên S3
             return Storage::disk('s3')->url($path);
