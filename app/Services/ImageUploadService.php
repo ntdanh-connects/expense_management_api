@@ -21,11 +21,28 @@ class ImageUploadService
         $fileName = (string) Str::uuid7() . '.' . $file->getClientOriginalExtension();
         $path = $folder . '/' . $fileName;
 
-        // 2. Upload file lên S3
-        Storage::disk('s3')->put($path, file_get_contents($file));
+        // Kiểm tra xem có cấu hình AWS S3 đầy đủ hay không
+        $s3Key = config('filesystems.disks.s3.key');
+        $s3Secret = config('filesystems.disks.s3.secret');
+        $s3Bucket = config('filesystems.disks.s3.bucket');
 
-        // 3. Trả về URL đầy đủ trỏ tới ảnh trên S3
-        return Storage::disk('s3')->url($path);
+        if (!empty($s3Key) && !empty($s3Secret) && !empty($s3Bucket)) {
+            // 2. Upload file lên S3
+            Storage::disk('s3')->put($path, file_get_contents($file));
+
+            // 3. Trả về URL đầy đủ trỏ tới ảnh trên S3
+            return Storage::disk('s3')->url($path);
+        } else {
+            // FALLBACK: Lưu trữ cục bộ trong thư mục public của Laravel để tránh lỗi 500 khi chưa cấu hình S3
+            $destinationPath = public_path('uploads/' . $folder);
+            if (!file_exists($destinationPath)) {
+                mkdir($destinationPath, 0755, true);
+            }
+            $file->move($destinationPath, $fileName);
+
+            // Trả về URL trỏ tới server chính
+            return asset('uploads/' . $folder . '/' . $fileName);
+        }
     }
 
     /**
@@ -40,12 +57,24 @@ class ImageUploadService
             return false;
         }
 
-        // Phân tích cú pháp URL để lấy ra path tương đối trong bucket
+        // Phân tích cú pháp URL để lấy ra path tương đối
         $parsedUrl = parse_url($imageUrl);
         if (isset($parsedUrl['path'])) {
             $path = ltrim($parsedUrl['path'], '/');
 
-            // Nếu path chứa tên bucket ở đầu (trong trường hợp dùng path-style hoặc CDN), ta cắt bỏ tên bucket đi
+            // 1. Kiểm tra nếu là file cục bộ (nằm trong thư mục uploads/)
+            if (str_contains($path, 'uploads/')) {
+                // Trích xuất phần path bắt đầu từ uploads/
+                $uploadsIndex = strpos($path, 'uploads/');
+                $relativePath = substr($path, $uploadsIndex);
+                $localPath = public_path($relativePath);
+                if (file_exists($localPath)) {
+                    return unlink($localPath);
+                }
+                return false;
+            }
+
+            // 2. Nếu là AWS S3
             $bucketName = config('filesystems.disks.s3.bucket');
             if (str_starts_with($path, $bucketName . '/')) {
                 $path = substr($path, strlen($bucketName . '/'));

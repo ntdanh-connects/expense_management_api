@@ -18,6 +18,7 @@ Route::middleware(['custom.auth'])->group(function () {
     Route::get('/user/profile', [AuthController::class, 'getProfile']);
     Route::post('/user/profile', [AuthController::class, 'updateProfile']);
     Route::post('/user/avatar', [AuthController::class, 'updateAvatar']);
+    
     Route::get('/wallets', [WalletController::class, 'index']);
     Route::post('/wallets', [WalletController::class, 'store']);
     Route::post('/wallets/{id}', [WalletController::class, 'update']);
