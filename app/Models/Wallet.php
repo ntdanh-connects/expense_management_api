@@ -27,7 +27,7 @@ class Wallet extends Model
     {
         static::creating(function ($wallet) {
             if (empty($wallet->id)) {
-                $wallet->id = (string) Str::uuid();
+                $wallet->id = (string) Str::uuid7();
             }
         });
     }

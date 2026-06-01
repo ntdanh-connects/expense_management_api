@@ -10,6 +10,8 @@ use App\Notifications\Auth\VerifyEmailNotification;
 use Exception;
 use Illuminate\Support\Facades\Http;
 
+use function Illuminate\Support\now;
+
 class UserService
 {
     protected $userRepository;
@@ -22,7 +24,7 @@ class UserService
     public function registerUser(array $data)
     {
         return DB::transaction(function() use ($data){
-            $uuid = (string) Str::uuid();
+            $uuid = (string) Str::uuid7();
 
             $user = $this->userRepository->create([
                 'user_id' => $uuid,
@@ -78,22 +80,25 @@ class UserService
 
         if($existingSession){
             $existingSession->update([
-                'refresh_token_hash' => hash('sha256', $refreshToken),
-                'access_token_hash'  => hash('sha256', $accessToken),
-                'ip_address'=> $deviceData['ip_address'],
-                'expired_at' => now()->addDays(30)
+                'refresh_token_hash'      => hash('sha256', $refreshToken),
+                'access_token_hash'       => hash('sha256', $accessToken),
+                'access_token_expired_at' => now()->addMinutes(15),
+                'ip_address'              => $deviceData['ip_address'],
+                'expired_at'              => now()->addDays(30),
+                'revoked_at'              => null // Khởi động lại phiên làm việc (kích hoạt lại từ revoked sang active)
             ]);
         }else{
              $user->sessions()->create([
-            'id'                 => (string) Str::uuid(),
-            'refresh_token_hash' => hash('sha256', $refreshToken),
-            'access_token_hash'  => hash('sha256', $accessToken),
-            'device_type'        => $deviceData['device_type'],
-            'device_name'        => $deviceData['device_name'],
-            'ip_address'         => $deviceData['ip_address'],
-            'user_agent'         => $deviceData['user_agent'],
-            'expired_at'         => now()->addDays(30),
-            'created_at'         => now()
+            'id'                      => (string) Str::uuid7(),
+            'refresh_token_hash'      => hash('sha256', $refreshToken),
+            'access_token_hash'       => hash('sha256', $accessToken),
+            'access_token_expired_at' => now()->addMinutes(15),
+            'device_type'             => $deviceData['device_type'],
+            'device_name'             => $deviceData['device_name'],
+            'ip_address'              => $deviceData['ip_address'],
+            'user_agent'              => $deviceData['user_agent'],
+            'expired_at'              => now()->addDays(30),
+            'created_at'              => now()
             ]);
         }
         return [
@@ -116,9 +121,10 @@ class UserService
         $newRefreshToken = Str::random(60);
 
         DB::table('user_sessions')->where('id',$session->id)->update([
-            'refresh_token_hash' => hash('sha256',$newRefreshToken),
-            'access_token_hash'  => hash('sha256',$newAccessToken),
-            'expired_at'=> now()->addDays(30)
+            'refresh_token_hash'      => hash('sha256',$newRefreshToken),
+            'access_token_hash'       => hash('sha256',$newAccessToken),
+            'access_token_expired_at' => now()->addMinutes(15),
+            'expired_at'              => now()->addDays(30)
         ]);
 
         $user = $this->userRepository->find($userId);
@@ -206,7 +212,7 @@ class UserService
 
         // 3. Email chưa tồn tại -> Tạo tài khoản mới tự động
         return DB::transaction(function() use ($provider, $providerId, $email, $fullName, $avatarUrl, $deviceData) {
-            $uuid = (string) Str::uuid();
+            $uuid = (string) Str::uuid7();
 
             $user = $this->userRepository->create([
                 'user_id' => $uuid,
@@ -387,22 +393,25 @@ class UserService
 
         if ($existingSession) {
             $existingSession->update([
-                'refresh_token_hash' => hash('sha256', $refreshToken),
-                'access_token_hash'  => hash('sha256', $accessToken),
-                'ip_address'         => $deviceData['ip_address'],
-                'expired_at'         => now()->addDays(30)
+                'refresh_token_hash'      => hash('sha256', $refreshToken),
+                'access_token_hash'       => hash('sha256', $accessToken),
+                'access_token_expired_at' => now()->addMinutes(15),
+                'ip_address'              => $deviceData['ip_address'],
+                'expired_at'              => now()->addDays(30),
+                'revoked_at'              => null
             ]);
         } else {
             $user->sessions()->create([
-                'id'                 => (string) Str::uuid(),
-                'refresh_token_hash' => hash('sha256', $refreshToken),
-                'access_token_hash'  => hash('sha256', $accessToken),
-                'device_type'        => $deviceData['device_type'],
-                'device_name'        => $deviceData['device_name'],
-                'ip_address'         => $deviceData['ip_address'],
-                'user_agent'         => $deviceData['user_agent'],
-                'expired_at'         => now()->addDays(30),
-                'created_at'         => now()
+                'id'                      => (string) Str::uuid7(),
+                'refresh_token_hash'      => hash('sha256', $refreshToken),
+                'access_token_hash'       => hash('sha256', $accessToken),
+                'access_token_expired_at' => now()->addMinutes(15),
+                'device_type'             => $deviceData['device_type'],
+                'device_name'             => $deviceData['device_name'],
+                'ip_address'              => $deviceData['ip_address'],
+                'user_agent'              => $deviceData['user_agent'],
+                'expired_at'              => now()->addDays(30),
+                'created_at'              => now()
             ]);
         }
 
@@ -411,5 +420,25 @@ class UserService
             'access_token'  => $accessToken,
             'refresh_token' => $refreshToken
         ];
+    }
+
+    public function logoutCurrentDevice(string $plainAccessToken): void{
+        $hashedToken = hash('sha256',$plainAccessToken);
+        
+        DB::table('user_sessions')
+        ->where('access_token_hash',$hashedToken)
+        ->whereNull('revoked_at')
+        ->update([
+            'revoked_at' => now()
+        ]);
+    }
+
+    public function logoutAllDevices(string $userId):void{
+        DB::table('user_sessions')
+        ->where('user_id',$userId)
+        ->whereNull('revoked_at')
+        ->update([
+            'revoked_at' => now()
+        ]);
     }
 }
