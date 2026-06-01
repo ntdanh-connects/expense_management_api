@@ -146,8 +146,9 @@ class AuthController extends Controller{
     {
         try {
             $validated = $request->validate([
-                'provider' => 'required|string',
-                'token'    => 'required|string'
+                'provider'     => 'required|string',
+                'token'        => 'required|string',
+                'redirect_uri' => 'nullable|string'
             ]);
 
             $deviceData = [
@@ -157,7 +158,12 @@ class AuthController extends Controller{
                 'user_agent'  => $request->header('User-Agent'),
             ];
 
-            $result = $this->userService->socialLogin($validated['provider'], $validated['token'], $deviceData);
+            $result = $this->userService->socialLogin(
+                $validated['provider'], 
+                $validated['token'], 
+                $deviceData, 
+                $validated['redirect_uri'] ?? null
+            );
 
             if (isset($result['status']) && $result['status'] === 'requires_linking') {
                 return response()->json([

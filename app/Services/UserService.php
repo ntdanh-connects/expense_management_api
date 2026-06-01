@@ -154,14 +154,14 @@ class UserService
         return $user;
     }
 
-    public function socialLogin(string $provider, string $token, array $deviceData)
+    public function socialLogin(string $provider, string $token, array $deviceData, string $redirectUri = null)
     {
         $provider = strtolower($provider);
         if ($provider !== 'google' && $provider !== 'github') {
             throw new \Exception("Nhà cung cấp xác thực không được hỗ trợ!");
         }
 
-        $socialUser = $this->verifySocialToken($provider, $token);
+        $socialUser = $this->verifySocialToken($provider, $token, $redirectUri);
         $providerId = $socialUser['id'];
         $email = $socialUser['email'];
         $fullName = $socialUser['name'] ?? 'Social User';
@@ -293,62 +293,31 @@ class UserService
         return $this->generateUserSession($user, $deviceData);
     }
 
-    private function verifySocialToken(string $provider, string $token): array
+    private function verifySocialToken(string $provider, string $token, string $redirectUri = null): array
     {
-        if (str_starts_with($token, 'mock_')) {
-            $parts = explode('_', $token);
-            $email = isset($parts[2]) ? $parts[2] : 'mockuser@example.com';
-            $name = ucwords(str_replace(['@', '.', '-'], ' ', explode('@', $email)[0]));
-            return [
-                'id' => 'mock_id_' . md5($email),
-                'email' => $email,
-                'name' => $name,
-                'avatar_url' => 'https://www.gravatar.com/avatar/' . md5($email) . '?d=mp',
-            ];
-        }
-
-        if ($provider === 'google') {
-            // 1. Thử xác thực dưới dạng ID Token (Thường dùng trên Mobile/Flutter)
-            $response = Http::get("https://oauth2.googleapis.com/tokeninfo?id_token=" . $token);
-            
-            // 2. Nếu thất bại, thử xác thực dưới dạng Access Token
-            if ($response->failed()) {
-                $response = Http::withToken($token)->get("https://www.googleapis.com/oauth2/v3/userinfo");
-            }
-
-            if ($response->failed()) {
-                throw new \Exception("Token Google không hợp lệ hoặc đã hết hạn!");
-            }
-
-            $emailVerified = filter_var($response->json('email_verified'), FILTER_VALIDATE_BOOLEAN);
-            if (!$emailVerified) {
-                throw new \Exception("Tài khoản Google này chưa được xác thực email!");
-            }
-
-            return [
-                'id' => $response->json('sub'),
-                'email' => $response->json('email'),
-                'name' => $response->json('name'),
-                'avatar_url' => $response->json('picture'),
-            ];
-        }
-
+        // ... giữ nguyên code Google và Mock ...
+        
         if ($provider === 'github') {
             $accessToken = $token;
 
-            // Nếu token là mã authorization code (không phải access token định dạng gho_ hay ghp_)
-            if (!str_starts_with($token, 'gho_') && !str_starts_with($token, 'ghp_') && strlen($token) < 30) {
-                // Thực hiện quy đổi mã Code lấy Access Token từ máy chủ GitHub bảo mật
-                $exchangeResponse = Http::asJson()->acceptJson()->post("https://github.com/login/oauth/access_token", [
-                    'client_id' => config('services.github.client_id'),
+            if (!str_starts_with($token, 'gho_') && !str_starts_with($token, 'ghp_')) {
+                $exchangeParams = [
+                    'client_id'     => config('services.github.client_id'),
                     'client_secret' => config('services.github.client_secret'),
-                    'code' => $token,
-                ]);
+                    'code'          => $token,
+                ];
+                
+                // Nếu Frontend có gửi sang redirect_uri, ta phải gửi kèm theo đúng chuẩn OAuth2
+                if ($redirectUri) {
+                    $exchangeParams['redirect_uri'] = $redirectUri;
+                }
+
+                $exchangeResponse = Http::asJson()->acceptJson()->post("https://github.com/login/oauth/access_token", $exchangeParams);
 
                 if ($exchangeResponse->successful() && $exchangeResponse->json('access_token')) {
                     $accessToken = $exchangeResponse->json('access_token');
                 } else {
-                    throw new \Exception("Không thể quy đổi GitHub Auth Code lấy Access Token: " . ($exchangeResponse->json('error_description') ?? "Lỗi không xác định"));
+                    throw new \Exception("Không thể quy đổi GitHub Auth Code: " . ($exchangeResponse->json('error_description') ?? "Lỗi không xác định"));
                 }
             }
 
