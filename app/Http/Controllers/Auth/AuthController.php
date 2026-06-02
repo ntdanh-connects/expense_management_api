@@ -573,4 +573,40 @@ class AuthController extends Controller{
             ], 500);
         }
     }
+
+    /**
+     * API Xoá vĩnh viễn tài khoản và toàn bộ dữ liệu liên quan
+     */
+    public function deleteAccount(Request $request): JsonResponse
+    {
+        try {
+            $userId = $request->attributes->get('user_id')
+                    ?? $request->header('X-User-Id');
+
+            if (!$userId) {
+                throw new \Exception("Không thể xác định danh tính người dùng!");
+            }
+
+            $this->userService->deleteUserAccount($userId);
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Tài khoản của bạn và toàn bộ dữ liệu liên quan đã được xoá vĩnh viễn khỏi hệ thống.'
+            ], 200);
+
+        } catch (\Throwable $e) {
+            Log::error('Lỗi API xoá tài khoản:', [
+                'user_id' => $userId ?? 'unknown',
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Xoá tài khoản thất bại!',
+                'error'   => $e->getMessage()
+            ], 500);
+        }
+    }
 }
