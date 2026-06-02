@@ -8,6 +8,11 @@ use App\Services\UserService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use App\Models\User;
+use App\Notifications\Auth\ResetPasswordNotification;
 use Exception;
 
 class AuthController extends Controller{
@@ -349,6 +354,149 @@ class AuthController extends Controller{
                 'message' => 'Cập nhật họ tên thất bại!',
                 'error'   => $e->getMessage()
             ], 400);
+        }
+    }
+
+    /**
+     * API Gửi link đặt lại mật khẩu qua email
+     */
+    public function sendResetLinkEmail(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => 'required|email'
+        ]);
+
+        try {
+            $user = User::where('email', $request->email)->first();
+
+            if (!$user) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Không tìm thấy tài khoản tương ứng với email này!'
+                ], 404);
+            }
+
+            // Tạo token ngẫu nhiên cực bảo mật
+            $token = Str::random(64);
+
+            // Lưu hoặc cập nhật vào bảng password_reset_tokens
+            DB::table('password_reset_tokens')->updateOrInsert(
+                ['email' => $request->email],
+                [
+                    'token' => Hash::make($token),
+                    'created_at' => now()
+                ]
+            );
+
+            // Gửi email qua Resend sử dụng lớp Notification
+            $user->notify(new ResetPasswordNotification($user, $token));
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Đường dẫn đặt lại mật khẩu đã được gửi đến email của sếp!'
+            ], 200);
+
+        } catch (\Throwable $e) {
+            Log::error('Lỗi gửi email đặt lại mật khẩu:', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gửi email đặt lại mật khẩu thất bại!',
+                'error' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+    /**
+     * Web hiển thị Form đặt lại mật khẩu
+     */
+    public function showResetForm(Request $request, $token)
+    {
+        $email = $request->query('email');
+
+        if (!$email) {
+            return response('Đường dẫn không hợp lệ! Thiếu thông tin email xác minh.', 400);
+        }
+
+        // Kiểm tra xem token và email có tồn tại khớp nhau không
+        $resetRecord = DB::table('password_reset_tokens')->where('email', $email)->first();
+
+        if (!$resetRecord || !Hash::check($token, $resetRecord->token)) {
+            return response('Đường dẫn đặt lại mật khẩu không chính xác hoặc đã được sử dụng!', 400);
+        }
+
+        // Kiểm tra xem token có bị hết hạn không (60 phút)
+        if (now()->subMinutes(60)->gt($resetRecord->created_at)) {
+            // Xoá luôn token hết hạn cho sạch DB
+            DB::table('password_reset_tokens')->where('email', $email)->delete();
+            return response('Đường dẫn đặt lại mật khẩu đã hết hạn sau 60 phút!', 400);
+        }
+
+        return view('auth.reset-password', [
+            'token' => $token,
+            'email' => $email
+        ]);
+    }
+
+    /**
+     * Xử lý POST đổi mật khẩu mới
+     */
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'token' => 'required',
+            'email' => 'required|email',
+            'password' => 'required|min:8|confirmed'
+        ]);
+
+        try {
+            $resetRecord = DB::table('password_reset_tokens')->where('email', $request->email)->first();
+
+            if (!$resetRecord || !Hash::check($request->token, $resetRecord->token)) {
+                return back()->withErrors(['email' => 'Đường dẫn đặt lại mật khẩu không hợp lệ hoặc đã hết hạn!']);
+            }
+
+            // Kiểm tra hết hạn 60 phút
+            if (now()->subMinutes(60)->gt($resetRecord->created_at)) {
+                DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+                return back()->withErrors(['email' => 'Đường dẫn đặt lại mật khẩu đã hết hạn!']);
+            }
+
+            $user = User::where('email', $request->email)->first();
+
+            if (!$user) {
+                return back()->withErrors(['email' => 'Không tìm thấy tài khoản tương ứng trong hệ thống!']);
+            }
+
+            // Cập nhật hoặc Tạo mới bản ghi mật khẩu (Áp dụng cơ chế Đăng Nhập Kép cho tài khoản Google/GitHub)
+            $user->credential()->updateOrCreate(
+                ['user_id' => $user->user_id],
+                [
+                    'password_hash' => Hash::make($request->password),
+                    'password_changed_at' => now()
+                ]
+            );
+
+            // Thu hồi token cũ sau khi đổi thành công để bảo mật
+            DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+
+            // Hiển thị giao diện thành công tuyệt đẹp!
+            return view('auth.reset-success');
+
+        } catch (\Throwable $e) {
+            Log::error('Lỗi khi thiết lập mật khẩu mới:', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return back()->withErrors(['error' => 'Thiết lập mật khẩu mới thất bại! Lỗi: ' . $e->getMessage()]);
         }
     }
 }

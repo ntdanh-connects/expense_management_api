@@ -44,12 +44,12 @@ class VerifyEmailNotification extends Notification
         );
         return (new MailMessage)
             ->subject('Xác thực tài khoản App Quản lý chi tiêu')
-            ->greeting('Chào sếp ' . ($this->user->profile->full_name ?? '') . '!')
-            ->line('Cảm ơn sếp đã đăng ký tài khoản tại hệ thống của chúng tôi.')
+            ->greeting('Chào bạn ' . ($this->user->profile->full_name ?? '') . '!')
+            ->line('Cảm ơn bạn đã đăng ký tài khoản tại hệ thống của chúng tôi.')
             ->line('Vui lòng nhấn vào nút bên dưới để kích hoạt tài khoản và bắt đầu trải nghiệm.')
             ->action('Xác Thực Tài Khoản', $verifyURL)
             ->line('Đường link này sẽ hết hạn sau 60 phút.')
-            ->line('Nếu sếp không đăng ký tài khoản này, vui lòng bỏ qua email này.');
+            ->line('Nếu bạn không đăng ký tài khoản này, vui lòng bỏ qua email này.');
     }
 
     public function toArray($notifiable): array

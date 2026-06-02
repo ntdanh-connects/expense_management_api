@@ -12,6 +12,7 @@ Route::post('/login',[AuthController::class, 'login']);
 Route::post('/refresh-token', [AuthController::class, 'refreshToken']);
 Route::post('/auth/social', [AuthController::class, 'socialLogin']);
 Route::post('/auth/link-social', [AuthController::class, 'linkSocial']);
+Route::post('/auth/forgot-password', [AuthController::class, 'sendResetLinkEmail']);
 // Wallet and Protected User routes
 Route::middleware(['custom.auth'])->group(function () {
     // Wallet and Protected User routes
