@@ -594,4 +594,31 @@ class UserService
             DB::table('users')->where('user_id', $userId)->delete();
         });
     }
+
+    /**
+     * Thay đổi mật khẩu người dùng sau khi xác thực mật khẩu cũ
+     */
+    public function changePassword(string $userId, array $data): bool
+    {
+        return DB::transaction(function () use ($userId, $data) {
+            $credential = DB::table('user_credentials')->where('user_id', $userId)->first();
+            
+            if (!$credential) {
+                throw new \Exception("Không tìm thấy thông tin tài khoản!");
+            }
+
+            if (!Hash::check($data['old_password'], $credential->password_hash)) {
+                throw new \Exception("Mật khẩu hiện tại không chính xác!");
+            }
+
+            DB::table('user_credentials')
+                ->where('user_id', $userId)
+                ->update([
+                    'password_hash' => Hash::make($data['new_password']),
+                    'updated_at' => now()
+                ]);
+
+            return true;
+        });
+    }
 }

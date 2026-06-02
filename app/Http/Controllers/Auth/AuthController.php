@@ -518,59 +518,37 @@ class AuthController extends Controller{
     /**
      * API Đổi mật khẩu khi đã đăng nhập (Thu hồi toàn bộ thiết bị)
      */
-    public function changePassword(Request $request): JsonResponse
+    public function changePassword(Request $request)
     {
-        $request->validate([
-            'current_password' => 'required|string',
-            'password' => 'required|string|min:8|confirmed'
-        ]);
-
         try {
-            $userId = $request->attributes->get('user_id')
-                    ?? $request->header('X-User-Id');
-
-            if (!$userId) {
-                throw new \Exception("Không thể xác định danh tính người dùng!");
-            }
-
-            $user = User::findOrFail($userId);
-
-            // Kiểm tra mật khẩu hiện tại
-            if (!$user->credential || !Hash::check($request->current_password, $user->credential->password_hash)) {
-                return response()->json([
-                    'status'  => 'error',
-                    'message' => 'Mật khẩu hiện tại không chính xác!'
-                ], 400);
-            }
-
-            // Cập nhật mật khẩu mới (dùng updateOrCreate phòng trường hợp user đăng nhập qua MXH chưa có bản ghi credential)
-            $user->credential()->updateOrCreate(
-                ['user_id' => $user->user_id],
-                [
-                    'password_hash' => Hash::make($request->password),
-                    'password_changed_at' => now()
-                ]
-            );
+            $userId = $request->user()->id; 
             
-            $this->userService->logoutAllDevices($userId);
+            $validated = $request->validate([
+                'old_password' => 'required|string',
+                'new_password' => 'required|string|min:6|different:old_password',
+            ], [
+                'old_password.required' => 'Vui lòng nhập mật khẩu hiện tại.',
+                'new_password.required' => 'Vui lòng nhập mật khẩu mới.',
+                'new_password.different' => 'Mật khẩu mới không được trùng với mật khẩu cũ.'
+            ]);
+
+            $this->userService->changePassword($userId, $validated);
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Đổi mật khẩu thành công! Tất cả phiên đăng nhập trên các thiết bị đã được thu hồi.'
+                'message' => 'Mật khẩu của bạn đã được thay đổi thành công!'
             ], 200);
 
-        } catch (\Throwable $e) {
-            Log::error('Lỗi khi đổi mật khẩu user ' . ($userId ?? 'unknown') . ':', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ]);
-
+        } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'status'  => 'error',
-                'message' => 'Đổi mật khẩu thất bại!',
-                'error'   => $e->getMessage()
-            ], 500);
+                'message' => $e->validator->errors()->first(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => $e->getMessage()
+            ], 400); 
         }
     }
 
