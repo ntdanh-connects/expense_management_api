@@ -118,4 +118,57 @@ class WalletController extends Controller {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 400);
         }
     }
+
+    //API 5: POST /api/wallets/transfer (Chuyển tiền giữa các ví)
+    public function transfer(Request $request)
+    {
+        try {
+            $userId = $request->attributes->get('user_id');
+
+            if (!$userId) {
+                return response()->json(['status' => 'error', 'message' => 'Vui lòng truyền user_id vào request!'], 400);
+            }
+
+            $validated = $request->validate([
+                'from_wallet_id' => 'required|uuid',
+                'to_wallet_id'   => 'required|uuid',
+                'amount'         => 'required|numeric|min:0.01',
+                'notes'          => 'nullable|string|max:500'
+            ]);
+
+            $result = $this->walletService->transferMoney($userId, $validated);
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Chuyển tiền giữa các ví thành công!',
+                'data'    => $result
+            ], 200);
+        } catch (\Throwable $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 400);
+        }
+    }
+
+    //API 6: GET /api/wallets/{id}/transactions (Lịch sử giao dịch của ví)
+    public function transactions(Request $request, $id)
+    {
+        try {
+            $userId = $request->attributes->get('user_id');
+
+            if (!$userId) {
+                return response()->json(['status' => 'error', 'message' => 'Vui lòng truyền user_id vào request!'], 400);
+            }
+
+            $perPage = (int) $request->query('per_page', 20);
+
+            $transactions = $this->walletService->getWalletTransactions($id, $userId, $perPage);
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Lấy lịch sử giao dịch của ví thành công!',
+                'data'    => $transactions
+            ], 200);
+        } catch (\Throwable $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 400);
+        }
+    }
 }

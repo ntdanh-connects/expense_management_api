@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\WalletController;
+use App\Http\Controllers\CategoryController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::get('/verify-email/{id}/{hash}', [AuthController::class, 'verify'])
@@ -26,6 +27,15 @@ Route::middleware(['custom.auth'])->group(function () {
     Route::post('/wallets', [WalletController::class, 'store']);
     Route::post('/wallets/{id}', [WalletController::class, 'update']);
     Route::delete('/wallets/{id}', [WalletController::class, 'destroy']);
+    Route::post('/wallets/transfer', [WalletController::class, 'transfer']);
+    Route::get('/wallets/{id}/transactions', [WalletController::class, 'transactions']);
+
+    // Categories routes
+    Route::get('/categories', [CategoryController::class, 'index']);
+    Route::post('/categories', [CategoryController::class, 'store']);
+    Route::post('/categories/{id}', [CategoryController::class, 'update']);
+    Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
+    Route::post('/categories/merge', [CategoryController::class, 'merge']);
 
     //Logut and logout all
     Route::post('/logout',[AuthController::class, 'logout']);
