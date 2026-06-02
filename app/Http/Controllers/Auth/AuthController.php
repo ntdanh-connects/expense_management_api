@@ -44,25 +44,25 @@ class AuthController extends Controller{
         try{
             if(! $request->hasValidSignature()){
                 return response()->json([
-                    'message' => 'Đường dẫn hiện tại đã hết hạn hoặc sai cấu trúc'
+                    'message' => __('messages.invalid_signature')
                 ], 403);
             }
             $user = \App\Models\User::findOrFail($id);
 
             if(! hash_equals((string) $hash, sha1($user->email))){
-                return response()->json(['message' => 'Mã xác thực không trùng khớp!'], 403);
+                return response()->json(['message' => __('messages.activation_code_mismatch')], 403);
             }
             if ($user->email_verified_at) {
-                return response()->json(['message' => 'Tài khoản này đã được kích hoạt trước đó.'], 200);
+                return response()->json(['message' => __('messages.account_already_activated')], 200);
             }
 
             $user->update(['email_verified_at' => now()]);
 
-            return response()->json(['message' => 'Kích hoạt tài khoản đồ án thành công!'], 200);
+            return response()->json(['message' => __('messages.activation_success')], 200);
 
         }catch (Exception $e){
             return response()->json([
-                'message' => 'Lỗi xác thực tài khoản !',
+                'message' => __('messages.activation_failed'),
                 'error' => $e->getMessage()
             ],500);
         }

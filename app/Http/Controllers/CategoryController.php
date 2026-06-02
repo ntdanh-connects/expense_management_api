@@ -27,7 +27,7 @@ class CategoryController extends Controller
             if (!$userId) {
                 return response()->json([
                     'status'  => 'error',
-                    'message' => 'Không thể xác định danh tính người dùng!'
+                    'message' => __('messages.user_id_required')
                 ], 400);
             }
 
@@ -35,14 +35,14 @@ class CategoryController extends Controller
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Đồng bộ cây danh mục Momo thành công!',
+                'message' => __('messages.sync_categories_success'),
                 'data'    => $categories
             ], 200);
 
         } catch (\Throwable $e) {
             return response()->json([
                 'status'  => 'error',
-                'message' => 'Lấy danh mục thất bại!',
+                'message' => __('messages.get_categories_failed'),
                 'error'   => $e->getMessage()
             ], 500);
         }
@@ -60,7 +60,7 @@ class CategoryController extends Controller
             if (!$userId) {
                 return response()->json([
                     'status'  => 'error',
-                    'message' => 'Không thể xác định danh tính người dùng!'
+                    'message' => __('messages.user_id_required')
                 ], 400);
             }
 
@@ -76,14 +76,14 @@ class CategoryController extends Controller
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Tạo danh mục tùy chỉnh thành công!',
+                'message' => __('messages.create_category_success'),
                 'data'    => $category
             ], 201);
 
         } catch (\Throwable $e) {
             return response()->json([
                 'status'  => 'error',
-                'message' => 'Tạo danh mục tùy chỉnh thất bại!',
+                'message' => __('messages.create_category_failed'),
                 'error'   => $e->getMessage()
             ], 400);
         }
@@ -101,7 +101,7 @@ class CategoryController extends Controller
             if (!$userId) {
                 return response()->json([
                     'status'  => 'error',
-                    'message' => 'Không thể xác định danh tính người dùng!'
+                    'message' => __('messages.user_id_required')
                 ], 400);
             }
 
@@ -116,14 +116,14 @@ class CategoryController extends Controller
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Cập nhật danh mục thành công!',
+                'message' => __('messages.update_category_success'),
                 'data'    => $category
             ], 200);
 
         } catch (\Throwable $e) {
             return response()->json([
                 'status'  => 'error',
-                'message' => 'Cập nhật danh mục thất bại!',
+                'message' => __('messages.update_category_failed'),
                 'error'   => $e->getMessage()
             ], 400);
         }
@@ -141,7 +141,7 @@ class CategoryController extends Controller
             if (!$userId) {
                 return response()->json([
                     'status'  => 'error',
-                    'message' => 'Không thể xác định danh tính người dùng!'
+                    'message' => __('messages.user_id_required')
                 ], 400);
             }
 
@@ -149,13 +149,13 @@ class CategoryController extends Controller
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Xóa danh mục tùy chỉnh thành công!'
+                'message' => __('messages.delete_category_success')
             ], 200);
 
         } catch (\Throwable $e) {
             return response()->json([
                 'status'  => 'error',
-                'message' => 'Xóa danh mục tùy chỉnh thất bại!',
+                'message' => __('messages.delete_category_failed'),
                 'error'   => $e->getMessage()
             ], 400);
         }
@@ -173,7 +173,7 @@ class CategoryController extends Controller
             if (!$userId) {
                 return response()->json([
                     'status'  => 'error',
-                    'message' => 'Không thể xác định danh tính người dùng!'
+                    'message' => __('messages.user_id_required')
                 ], 400);
             }
 
@@ -186,13 +186,13 @@ class CategoryController extends Controller
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Gộp danh mục chi tiêu và chuyển đổi toàn bộ giao dịch liên quan thành công!'
+                'message' => __('messages.merge_categories_success')
             ], 200);
 
         } catch (\Throwable $e) {
             return response()->json([
                 'status'  => 'error',
-                'message' => 'Gộp danh mục thất bại!',
+                'message' => __('messages.merge_categories_failed'),
                 'error'   => $e->getMessage()
             ], 400);
         }

@@ -19,6 +19,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'api/*',
         ]);
 
+        $middleware->append(\App\Http\Middleware\LocalizationMiddleware::class);
+
         $middleware->alias([
             'custom.auth' => \App\Http\Middleware\CustomTokenAuth::class,
         ]);
