@@ -20,14 +20,14 @@ class WalletController extends Controller {
            $userId = $request->attributes->get('user_id');
             
             if (!$userId) {
-                return response()->json(['status' => 'error', 'message' => 'Vui lòng truyền user_id vào request!'], 400);
+                return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
             }
 
             $wallets = $this->walletService->getAllUserWallets($userId);
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Đồng bộ danh sách ví thành công!',
+                'message' => __('messages.sync_wallets_success'),
                 'data'    => $wallets
             ], 200);
         } catch (\Throwable $e) {
@@ -42,7 +42,7 @@ class WalletController extends Controller {
             $userId = $request->attributes->get('user_id');
 
             if (!$userId) {
-                return response()->json(['status' => 'error', 'message' => 'Vui lòng truyền user_id vào request!'], 400);
+                return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
             }
 
             // Validate khít 100% tên trường trong file SQL thực tế của Danh
@@ -60,7 +60,7 @@ class WalletController extends Controller {
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Tạo cấu trúc ví mới thành công rực rỡ!',
+                'message' => __('messages.create_wallet_success'),
                 'data'    => $wallet
             ], 201);
         } catch (\Throwable $e) {
@@ -75,7 +75,7 @@ class WalletController extends Controller {
             $userId = $request->attributes->get('user_id');
 
             if (!$userId) {
-                return response()->json(['status' => 'error', 'message' => 'Vui lòng truyền user_id vào request!'], 400);
+                return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
             }
 
             $validated = $request->validate([
@@ -90,7 +90,7 @@ class WalletController extends Controller {
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Cập nhật ví thành công!',
+                'message' => __('messages.update_wallet_success'),
                 'data'    => $wallet
             ], 200);
         } catch (\Throwable $e) {
@@ -105,14 +105,14 @@ class WalletController extends Controller {
             $userId = $request->attributes->get('user_id');
 
             if (!$userId) {
-                return response()->json(['status' => 'error', 'message' => 'Vui lòng truyền user_id vào request!'], 400);
+                return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
             }
 
             $this->walletService->deleteWallet($id, $userId);
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Đã đưa ví vào trạng thái xóa mềm thành công!'
+                'message' => __('messages.delete_wallet_success')
             ], 200);
         } catch (\Throwable $e) {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 400);
@@ -126,7 +126,7 @@ class WalletController extends Controller {
             $userId = $request->attributes->get('user_id');
 
             if (!$userId) {
-                return response()->json(['status' => 'error', 'message' => 'Vui lòng truyền user_id vào request!'], 400);
+                return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
             }
 
             $validated = $request->validate([
@@ -140,7 +140,7 @@ class WalletController extends Controller {
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Chuyển tiền giữa các ví thành công!',
+                'message' => __('messages.transfer_success'),
                 'data'    => $result
             ], 200);
         } catch (\Throwable $e) {
@@ -155,7 +155,7 @@ class WalletController extends Controller {
             $userId = $request->attributes->get('user_id');
 
             if (!$userId) {
-                return response()->json(['status' => 'error', 'message' => 'Vui lòng truyền user_id vào request!'], 400);
+                return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
             }
 
             $perPage = (int) $request->query('per_page', 20);
@@ -164,7 +164,7 @@ class WalletController extends Controller {
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Lấy lịch sử giao dịch của ví thành công!',
+                'message' => __('messages.get_transactions_success'),
                 'data'    => $transactions
             ], 200);
         } catch (\Throwable $e) {

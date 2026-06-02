@@ -54,7 +54,7 @@ class WalletService {
 
         if (!$wallet || $wallet->user_id !== $userId) {
             $wUid = $wallet ? $wallet->user_id : 'null';
-            throw new \Exception("Ví không tồn tại hoặc bạn không có quyền chỉnh sửa! (wUid: $wUid, rUid: $userId)");
+            throw new \Exception(__('messages.wallet_unauthorized', ['wUid' => $wUid, 'rUid' => $userId]));
         }
 
         $wallet->update($data);
@@ -71,13 +71,13 @@ class WalletService {
         $wallet = $this->walletRepository->find($walletId);
         
         if (!$wallet || $wallet->user_id !== $userId) {
-            throw new \Exception("Ví không tồn tại hoặc không có quyền thao tác!");
+            throw new \Exception(__('messages.wallet_not_found_or_unauthorized'));
         }
 
         // Check số dư hiện tại từ bảng balance trước khi cho xóa mềm
         $balance = DB::table('wallet_balances')->where('wallet_id', $walletId)->value('available_balance');
         if ((float)$balance > 0) {
-            throw new \Exception("Ví hiện tại vẫn còn tiền dư, không thể xóa!");
+            throw new \Exception(__('messages.wallet_has_balance'));
         }
 
         return $wallet->delete();
@@ -95,11 +95,11 @@ class WalletService {
             $notes = $data['notes'] ?? null;
 
             if ($fromWalletId === $toWalletId) {
-                throw new \Exception("Ví chuyển và ví nhận không thể trùng nhau!");
+                throw new \Exception(__('messages.wallets_same'));
             }
 
             if ($amount <= 0) {
-                throw new \Exception("Số tiền chuyển phải lớn hơn 0!");
+                throw new \Exception(__('messages.amount_must_be_positive'));
             }
 
             // 1. Kiểm tra sự tồn tại và quyền sở hữu của 2 chiếc ví
@@ -107,11 +107,11 @@ class WalletService {
             $toWallet = $this->walletRepository->find($toWalletId);
 
             if (!$fromWallet || $fromWallet->user_id !== $userId) {
-                throw new \Exception("Ví chuyển không tồn tại hoặc bạn không có quyền sở hữu!");
+                throw new \Exception(__('messages.source_wallet_not_found'));
             }
 
             if (!$toWallet || $toWallet->user_id !== $userId) {
-                throw new \Exception("Ví nhận không tồn tại hoặc bạn không có quyền sở hữu!");
+                throw new \Exception(__('messages.target_wallet_not_found'));
             }
 
             // 2. Lock bảng số dư để tránh race condition (ghi đè số dư nếu có 2 giao dịch cùng lúc)
@@ -119,15 +119,15 @@ class WalletService {
             $toBalance = DB::table('wallet_balances')->where('wallet_id', $toWalletId)->lockForUpdate()->first();
 
             if (!$fromBalance) {
-                throw new \Exception("Không tìm thấy dữ liệu số dư của ví chuyển!");
+                throw new \Exception(__('messages.source_wallet_balance_not_found'));
             }
 
             if (!$toBalance) {
-                throw new \Exception("Không tìm thấy dữ liệu số dư của ví nhận!");
+                throw new \Exception(__('messages.target_wallet_balance_not_found'));
             }
 
             if (bccomp($fromBalance->available_balance, $amount, 2) === -1) {
-                throw new \Exception("Số dư khả dụng của ví chuyển không đủ để thực hiện giao dịch này!");
+                throw new \Exception(__('messages.insufficient_balance'));
             }
 
             // Lấy currency mặc định của user
@@ -148,7 +148,7 @@ class WalletService {
                 'amount'           => $amount,
                 'currency_code'    => $currency,
                 'exchange_rate'    => 1.000000,
-                'title'            => $notes ?? "Chuyển tiền sang ví " . $toWallet->name,
+                'title'            => $notes ?? __('messages.transfer_out_title', ['name' => $toWallet->name]),
                 'notes'            => $notes,
                 'transaction_date' => now(),
                 'source_type'      => 'transfer',
@@ -168,7 +168,7 @@ class WalletService {
                 'amount'           => $amount,
                 'currency_code'    => $currency,
                 'exchange_rate'    => 1.000000,
-                'title'            => $notes ?? "Nhận tiền từ ví " . $fromWallet->name,
+                'title'            => $notes ?? __('messages.transfer_in_title', ['name' => $fromWallet->name]),
                 'notes'            => $notes,
                 'transaction_date' => now(),
                 'source_type'      => 'transfer',
@@ -221,7 +221,7 @@ class WalletService {
         $wallet = $this->walletRepository->find($walletId);
         
         if (!$wallet || $wallet->user_id !== $userId) {
-            throw new \Exception("Ví không tồn tại hoặc bạn không có quyền truy cập lịch sử giao dịch!");
+            throw new \Exception(__('messages.history_unauthorized'));
         }
 
         return DB::table('transactions')

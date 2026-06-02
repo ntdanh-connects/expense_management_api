@@ -63,15 +63,15 @@ class UserService
         $user = $this->userRepository->findByEmail($data['email']);
 
         if(!$user || !Hash::check($data['password'], $user->credential->password_hash)){
-            throw new \Exception("Email hoặc mật khẩu không chính xác !");
+            throw new \Exception(__('messages.email_password_incorrect'));
         }
 
         if($user->status === 'suspended'){
-            throw new \Exception('Tài khoản của bạn hiện tạm dừng');
+            throw new \Exception(__('messages.user_suspended'));
         }
 
         if(is_null($user->email_verified_at)){
-            throw new \Exception('Hiện tại email chưa được kích hoạt !, vui lòng truy cập mail để xác thực tài khoản');
+            throw new \Exception(__('messages.email_not_verified'));
         }
 
         $accessToken = Str::random(60);
@@ -117,7 +117,7 @@ class UserService
         $session = $this->userRepository->findSessionbyToken($userId,$hashedToken);
 
         if(!$session){
-            throw new \Exception("Phiên làm việc đã hết hạn hoặc mã xác thực không hợp lệ, vui lòng đăng nhập lại!");
+            throw new \Exception(__('messages.session_expired_invalid_code'));
         }
 
         $newAccessToken = Str::random(60);
@@ -144,11 +144,11 @@ class UserService
         $user = $this->userRepository->findWithRelations($userId);
 
         if (!$user) {
-            throw new \Exception("Không tìm thấy thông tin người dùng trong hệ thống!");
+            throw new \Exception(__('messages.user_not_found'));
         }
 
         if ($user->status === 'suspended') {
-            throw new \Exception("Tài khoản của bạn đã bị khóa, vui lòng liên hệ ban quản trị!");
+            throw new \Exception(__('messages.user_locked'));
         }
 
         return $user;
@@ -158,7 +158,7 @@ class UserService
     {
         $provider = strtolower($provider);
         if ($provider !== 'google' && $provider !== 'github') {
-            throw new \Exception("Nhà cung cấp xác thực không được hỗ trợ!");
+            throw new \Exception(__('messages.provider_not_supported'));
         }
 
         $socialUser = $this->verifySocialToken($provider, $token, $redirectUri);
@@ -168,7 +168,7 @@ class UserService
         $avatarUrl = $socialUser['avatar_url'] ?? null;
 
         if (!$email) {
-            throw new \Exception("Không thể lấy email từ tài khoản $provider!");
+            throw new \Exception(__('messages.cannot_get_email_from_provider', ['provider' => $provider]));
         }
 
         // 1. Kiểm tra xem đã có user nào liên kết với social ID này chưa
@@ -178,7 +178,7 @@ class UserService
         if ($user) {
             // Đã liên kết trước đó -> Đăng nhập luôn!
             if ($user->status === 'suspended') {
-                throw new \Exception("Tài khoản của bạn đã bị tạm dừng!");
+                throw new \Exception(__('messages.user_suspended'));
             }
             return $this->generateUserSession($user, $deviceData);
         }
@@ -190,7 +190,7 @@ class UserService
             // Đã tồn tại tài khoản có email này (đăng ký thủ công hoặc MXH khác)
             // Kích hoạt Safe Account Linking!
             if ($userWithEmail->status === 'suspended') {
-                throw new \Exception("Tài khoản của bạn đã bị khóa!");
+                throw new \Exception(__('messages.user_locked'));
             }
 
             // Tạo link_token bảo mật, mã hóa toàn bộ dữ liệu MXH
@@ -249,12 +249,12 @@ class UserService
         try {
             $payload = \Illuminate\Support\Facades\Crypt::decrypt($linkToken);
         } catch (\Exception $e) {
-            throw new \Exception("Token liên kết tài khoản không hợp lệ hoặc đã hết hạn!");
+            throw new \Exception(__('messages.link_token_invalid'));
         }
 
         // Token chỉ có hiệu lực trong 10 phút
         if (now()->timestamp - $payload['timestamp'] > 600) {
-            throw new \Exception("Phiên liên kết tài khoản đã hết hạn! Vui lòng thử lại.");
+            throw new \Exception(__('messages.link_session_expired'));
         }
 
         $email = $payload['email'];
@@ -264,11 +264,11 @@ class UserService
 
         $user = $this->userRepository->findByEmail($email);
         if (!$user) {
-            throw new \Exception("Không tìm thấy tài khoản người dùng tương ứng!");
+            throw new \Exception(__('messages.user_not_found_link'));
         }
 
         if (!$user->credential || !Hash::check($password, $user->credential->password_hash)) {
-            throw new \Exception("Mật khẩu xác nhận không chính xác!");
+            throw new \Exception(__('messages.confirm_password_incorrect'));
         }
 
         // Cập nhật liên kết social ID trực tiếp trong bảng users
@@ -277,7 +277,7 @@ class UserService
         // Đảm bảo social ID này chưa bị liên kết bởi tài khoản khác (tránh xung đột)
         $exists = \App\Models\User::where($columnName, $providerId)->where('user_id', '!=', $user->user_id)->exists();
         if ($exists) {
-            throw new \Exception("Tài khoản $provider này đã được liên kết với một tài khoản khác trong hệ thống!");
+            throw new \Exception(__('messages.provider_already_linked', ['provider' => $provider]));
         }
 
         $user->update([
@@ -317,7 +317,7 @@ class UserService
                 if ($exchangeResponse->successful() && $exchangeResponse->json('access_token')) {
                     $accessToken = $exchangeResponse->json('access_token');
                 } else {
-                    throw new \Exception("Không thể quy đổi GitHub Auth Code: " . ($exchangeResponse->json('error_description') ?? "Lỗi không xác định"));
+                    throw new \Exception(__('messages.github_exchange_failed', ['error' => ($exchangeResponse->json('error_description') ?? "Unknown error")]));
                 }
             }
 
@@ -325,7 +325,7 @@ class UserService
             $response = Http::withToken($accessToken)->get("https://api.github.com/user");
             
             if ($response->failed()) {
-                throw new \Exception("Token GitHub không hợp lệ hoặc đã hết hạn!");
+                throw new \Exception(__('messages.github_token_invalid'));
             }
 
             $email = $response->json('email');
@@ -351,7 +351,7 @@ class UserService
             ];
         }
 
-        throw new \Exception("Nhà cung cấp xác thực không được hỗ trợ!");
+        throw new \Exception(__('messages.provider_not_supported'));
     }
 
     private function generateUserSession($user, array $deviceData): array
@@ -423,12 +423,12 @@ class UserService
             // 1. Tìm thông tin profile của user
             $user = $this->userRepository->find($userId);
             if (!$user) {
-                throw new \Exception("Không tìm thấy thông tin người dùng!");
+                throw new \Exception(__('messages.user_not_found'));
             }
             
             $profile = $user->profile;
             if (!$profile) {
-                throw new \Exception("Không tìm thấy thông tin hồ sơ của người dùng!");
+                throw new \Exception(__('messages.profile_not_found'));
             }
 
             $oldAvatarUrl = $profile->avatar_url;
@@ -458,14 +458,14 @@ class UserService
         return DB::transaction(function () use ($userId, $data) {
             $user = $this->userRepository->find($userId);
             if (!$user) {
-                throw new \Exception("Không tìm thấy thông tin người dùng!");
+                throw new \Exception(__('messages.user_not_found'));
             }
 
             // 1. Cập nhật thông tin profile (họ tên)
             if (isset($data['full_name'])) {
                 $profile = $user->profile;
                 if (!$profile) {
-                    throw new \Exception("Không tìm thấy hồ sơ người dùng tương ứng!");
+                    throw new \Exception(__('messages.profile_not_found'));
                 }
                 $profile->update([
                     'full_name' => $data['full_name']
@@ -503,7 +503,7 @@ class UserService
     {
         $user = $this->userRepository->find($userId);
         if (!$user) {
-            throw new \Exception("Không tìm thấy thông tin người dùng!");
+            throw new \Exception(__('messages.user_not_found'));
         }
 
         // 1. Xoá ảnh đại diện trên S3 trước (nếu có)
