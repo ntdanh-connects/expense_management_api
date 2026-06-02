@@ -451,7 +451,7 @@ class UserService
     }
 
     /**
-     * Cập nhật thông tin cá nhân (họ tên) của người dùng
+     * Cập nhật thông tin cá nhân (họ tên) & Cài đặt (đơn vị tiền tệ, múi giờ, giao diện, ngôn ngữ)
      */
     public function updateProfile(string $userId, array $data)
     {
@@ -461,14 +461,36 @@ class UserService
                 throw new \Exception("Không tìm thấy thông tin người dùng!");
             }
 
-            $profile = $user->profile;
-            if (!$profile) {
-                throw new \Exception("Không tìm thấy hồ sơ người dùng tương ứng!");
+            // 1. Cập nhật thông tin profile (họ tên)
+            if (isset($data['full_name'])) {
+                $profile = $user->profile;
+                if (!$profile) {
+                    throw new \Exception("Không tìm thấy hồ sơ người dùng tương ứng!");
+                }
+                $profile->update([
+                    'full_name' => $data['full_name']
+                ]);
             }
 
-            $profile->update([
-                'full_name' => $data['full_name']
-            ]);
+            // 2. Cập nhật thông tin preferences (đơn vị tiền tệ, múi giờ, v.v.)
+            $preferenceFields = ['currency', 'timezone', 'theme', 'language', 'financial_start_day'];
+            $preferenceData = array_intersect_key($data, array_flip($preferenceFields));
+
+            if (!empty($preferenceData)) {
+                $preference = $user->preference;
+                if (!$preference) {
+                    $user->preference()->create(array_merge([
+                        'language'            => 'vi',
+                        'theme'               => 'light',
+                        'currency'            => 'VND',
+                        'timezone'            => 'Asia/Ho_Chi_Minh',
+                        'financial_start_day' => 1,
+                        'created_at'          => now()
+                    ], $preferenceData));
+                } else {
+                    $preference->update($preferenceData);
+                }
+            }
 
             return $user->load('profile', 'preference');
         });

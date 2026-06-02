@@ -317,13 +317,28 @@ class AuthController extends Controller{
     }
 
     /**
-     * API Cập nhật thông tin cá nhân (Họ tên)
+     * API Cập nhật thông tin cá nhân & Cài đặt (Họ tên, Đơn vị tiền tệ, Múi giờ, v.v.)
      */
     public function updateProfile(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'full_name' => 'required|string|max:255'
+        $request->validate([
+            'full_name' => 'nullable|string|max:255',
+            'currency'  => 'nullable|string|max:10',
+            'timezone'  => 'nullable|string|max:100',
+            'theme'     => 'nullable|string|in:light,dark',
+            'language'  => 'nullable|string|in:vi,en',
         ]);
+
+        $validated = array_filter($request->only([
+            'full_name', 'currency', 'timezone', 'theme', 'language'
+        ]), fn($value) => !is_null($value));
+
+        if (empty($validated)) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Không có thông tin nào được gửi để cập nhật!'
+            ], 400);
+        }
 
         try {
             $userId = $request->attributes->get('user_id')
@@ -337,12 +352,12 @@ class AuthController extends Controller{
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Cập nhật họ tên thành công!',
+                'message' => 'Cập nhật thông tin cá nhân thành công!',
                 'data'    => $profile
             ], 200);
 
         } catch (\Throwable $e) {
-            Log::error('Lỗi API cập nhật profile:', [
+            Log::error('Lỗi API cập nhật profile/preferences:', [
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -351,7 +366,7 @@ class AuthController extends Controller{
 
             return response()->json([
                 'status'  => 'error',
-                'message' => 'Cập nhật họ tên thất bại!',
+                'message' => 'Cập nhật thông tin cá nhân thất bại!',
                 'error'   => $e->getMessage()
             ], 400);
         }
@@ -497,6 +512,65 @@ class AuthController extends Controller{
             ]);
 
             return back()->withErrors(['error' => 'Thiết lập mật khẩu mới thất bại! Lỗi: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * API Đổi mật khẩu khi đã đăng nhập (Thu hồi toàn bộ thiết bị)
+     */
+    public function changePassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'current_password' => 'required|string',
+            'password' => 'required|string|min:8|confirmed'
+        ]);
+
+        try {
+            $userId = $request->attributes->get('user_id')
+                    ?? $request->header('X-User-Id');
+
+            if (!$userId) {
+                throw new \Exception("Không thể xác định danh tính người dùng!");
+            }
+
+            $user = User::findOrFail($userId);
+
+            // Kiểm tra mật khẩu hiện tại
+            if (!$user->credential || !Hash::check($request->current_password, $user->credential->password_hash)) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => 'Mật khẩu hiện tại không chính xác!'
+                ], 400);
+            }
+
+            // Cập nhật mật khẩu mới (dùng updateOrCreate phòng trường hợp user đăng nhập qua MXH chưa có bản ghi credential)
+            $user->credential()->updateOrCreate(
+                ['user_id' => $user->user_id],
+                [
+                    'password_hash' => Hash::make($request->password),
+                    'password_changed_at' => now()
+                ]
+            );
+            
+            $this->userService->logoutAllDevices($userId);
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Đổi mật khẩu thành công! Tất cả phiên đăng nhập trên các thiết bị đã được thu hồi.'
+            ], 200);
+
+        } catch (\Throwable $e) {
+            Log::error('Lỗi khi đổi mật khẩu user ' . ($userId ?? 'unknown') . ':', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Đổi mật khẩu thất bại!',
+                'error'   => $e->getMessage()
+            ], 500);
         }
     }
 }
