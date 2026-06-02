@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Repositories\Contracts\WalletRepositoryInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 class WalletService {
     protected $walletRepository;
@@ -49,11 +50,19 @@ class WalletService {
     {
         $wallet = $this->walletRepository->find($walletId);
         
+        Log::info("DEBUG UPDATE: wallet_id=$walletId, wallet_user_id=" . ($wallet ? $wallet->user_id : 'null') . ", request_user_id=$userId");
+
         if (!$wallet || $wallet->user_id !== $userId) {
-            throw new \Exception("Ví không tồn tại hoặc bạn không có quyền chỉnh sửa!");
+            $wUid = $wallet ? $wallet->user_id : 'null';
+            throw new \Exception("Ví không tồn tại hoặc bạn không có quyền chỉnh sửa! (wUid: $wUid, rUid: $userId)");
         }
 
         $wallet->update($data);
+
+        // 🔥 Gắn thêm số dư hiện tại từ bảng wallet_balances để Frontend không bị mất số dư (về 0đ) khi cập nhật!
+        $balance = DB::table('wallet_balances')->where('wallet_id', $walletId)->value('available_balance') ?? 0.00;
+        $wallet->available_balance = (float)$balance;
+
         return $wallet;
     }
 
