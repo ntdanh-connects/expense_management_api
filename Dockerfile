@@ -16,6 +16,10 @@ RUN apk update && apk add --no-cache \
 # Cài đặt các PHP extensions bắt buộc cho Laravel, PostgreSQL và xử lý file zip
 RUN docker-php-ext-install pdo pdo_pgsql zip
 
+# Cấu hình PHP để cho phép upload file kích thước lớn (tối đa 20MB)
+RUN echo "upload_max_filesize = 20M" > /usr/local/etc/php/conf.d/uploads.ini && \
+    echo "post_max_size = 20M" >> /usr/local/etc/php/conf.d/uploads.ini
+
 # Cài đặt Composer chính chủ bản mới nhất
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
