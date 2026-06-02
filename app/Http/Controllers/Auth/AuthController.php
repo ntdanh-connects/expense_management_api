@@ -7,6 +7,7 @@ use App\Http\Requests\Auth\RegisterRequest;
 use App\Services\UserService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Exception;
 
 class AuthController extends Controller{
@@ -274,7 +275,7 @@ class AuthController extends Controller{
     public function updateAvatar(Request $request): JsonResponse
     {
         $request->validate([
-            'avatar' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048' // Tối đa 2MB
+            'avatar' => 'required|image|mimes:jpeg,png,jpg,gif|max:20480' // Tối đa 20MB
         ]);
 
         try {
@@ -295,11 +296,18 @@ class AuthController extends Controller{
             ], 200);
 
         } catch (\Throwable $e) {
+            Log::error('Lỗi API cập nhật ảnh đại diện:', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'status'  => 'error',
                 'message' => 'Cập nhật ảnh đại diện thất bại!',
                 'error'   => $e->getMessage()
-            ], 500);
+            ], 400);
         }
     }
 
@@ -329,11 +337,18 @@ class AuthController extends Controller{
             ], 200);
 
         } catch (\Throwable $e) {
+            Log::error('Lỗi API cập nhật profile:', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'status'  => 'error',
                 'message' => 'Cập nhật họ tên thất bại!',
                 'error'   => $e->getMessage()
-            ], 500);
+            ], 400);
         }
     }
 }
