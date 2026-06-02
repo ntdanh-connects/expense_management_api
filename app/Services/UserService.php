@@ -495,4 +495,103 @@ class UserService
             return $user->load('profile', 'preference');
         });
     }
+
+    /**
+     * Xoá vĩnh viễn tài khoản người dùng và toàn bộ dữ liệu liên quan trên hệ thống
+     */
+    public function deleteUserAccount(string $userId): void
+    {
+        $user = $this->userRepository->find($userId);
+        if (!$user) {
+            throw new \Exception("Không tìm thấy thông tin người dùng!");
+        }
+
+        // 1. Xoá ảnh đại diện trên S3 trước (nếu có)
+        $profile = $user->profile;
+        if ($profile && $profile->avatar_url) {
+            try {
+                $this->imageUploadService->deleteFromS3($profile->avatar_url);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning("Không thể xoá avatar của user {$userId} trên S3 khi xoá tài khoản: " . $e->getMessage());
+            }
+        }
+
+        // 2. Sử dụng DB Transaction kết hợp trì hoãn ràng buộc để dọn sạch Database
+        DB::transaction(function () use ($userId) {
+            // Tận dụng cơ chế DEFERRABLE của các khoá ngoại để tắt kiểm tra ràng buộc tạm thời trong transaction này
+            DB::statement('SET CONSTRAINTS ALL DEFERRED');
+
+            // Xoá các bảng thống kê và phụ trợ
+            DB::table('daily_statistics')->where('user_id', $userId)->delete();
+            DB::table('monthly_statistics')->where('user_id', $userId)->delete();
+            DB::table('category_statistics')->where('user_id', $userId)->delete();
+            DB::table('report_exports')->where('user_id', $userId)->delete();
+            DB::table('import_jobs')->where('user_id', $userId)->delete();
+            DB::table('transaction_audits')->where('changed_by', $userId)->delete();
+
+            // Xoá cấu hình thông báo
+            DB::table('notification_preferences')->where('user_id', $userId)->delete();
+            
+            // Xoá các lượt gửi thông báo liên quan đến bảng notifications
+            DB::table('notification_deliveries')->whereIn('notification_id', function ($query) use ($userId) {
+                $query->select('id')->from('notifications')->where('user_id', $userId);
+            })->delete();
+            DB::table('notifications')->where('user_id', $userId)->delete();
+
+            // Xoá quy tắc định kỳ và lịch sử thực thi
+            DB::table('recurring_executions')->whereIn('recurring_rule_id', function ($query) use ($userId) {
+                $query->select('id')->from('recurring_rules')->where('user_id', $userId);
+            })->delete();
+            DB::table('recurring_rules')->where('user_id', $userId)->delete();
+
+            // Xoá tệp đính kèm giao dịch
+            DB::table('transaction_attachments')->whereIn('transaction_id', function ($query) use ($userId) {
+                $query->select('id')->from('transactions')->where('user_id', $userId);
+            })->delete();
+            // Xoá lịch sử thay đổi giao dịch
+            DB::table('transaction_audits')->whereIn('transaction_id', function ($query) use ($userId) {
+                $query->select('id')->from('transactions')->where('user_id', $userId);
+            })->delete();
+
+            // Xoá chuyển khoản giữa các ví
+            DB::table('wallet_transfers')->whereIn('from_wallet_id', function ($query) use ($userId) {
+                $query->select('id')->from('wallets')->where('user_id', $userId);
+            })->orWhereIn('to_wallet_id', function ($query) use ($userId) {
+                $query->select('id')->from('wallets')->where('user_id', $userId);
+            })->delete();
+
+            // Xoá số dư ví
+            DB::table('wallet_balances')->whereIn('wallet_id', function ($query) use ($userId) {
+                $query->select('id')->from('wallets')->where('user_id', $userId);
+            })->delete();
+
+            // Xoá giao dịch
+            DB::table('transactions')->where('user_id', $userId)->delete();
+
+            // Xoá hạn mức ngân sách (Budgets)
+            DB::table('budget_usages')->whereIn('budget_id', function ($query) use ($userId) {
+                $query->select('id')->from('budgets')->where('user_id', $userId);
+            })->delete();
+            DB::table('budget_alerts')->whereIn('budget_id', function ($query) use ($userId) {
+                $query->select('id')->from('budgets')->where('user_id', $userId);
+            })->delete();
+            DB::table('budgets')->where('user_id', $userId)->delete();
+
+            // Xoá ví
+            DB::table('wallets')->where('user_id', $userId)->delete();
+
+            // Xoá danh mục
+            DB::table('categories')->where('user_id', $userId)->delete();
+
+            // Xoá credential, preference, profile, session, oauth
+            DB::table('user_credentials')->where('user_id', $userId)->delete();
+            DB::table('user_preferences')->where('user_id', $userId)->delete();
+            DB::table('user_profiles')->where('user_id', $userId)->delete();
+            DB::table('user_sessions')->where('user_id', $userId)->delete();
+            DB::table('oauth_accounts')->where('user_id', $userId)->delete();
+
+            // Cuối cùng xoá bản ghi chính trong bảng users
+            DB::table('users')->where('user_id', $userId)->delete();
+        });
+    }
 }
