@@ -3,16 +3,21 @@
 namespace App\Services;
 
 use App\Repositories\Contracts\WalletRepositoryInterface;
+use App\Services\ExchangeRateService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 
 class WalletService {
     protected $walletRepository;
+    protected $exchangeRateService;
 
-    public function __construct(WalletRepositoryInterface $walletRepository)
-    {
+    public function __construct(
+        WalletRepositoryInterface $walletRepository,
+        ExchangeRateService $exchangeRateService
+    ) {
         $this->walletRepository = $walletRepository;
+        $this->exchangeRateService = $exchangeRateService;
     }
 
     public function getAllUserWallets(string $userId)
@@ -24,15 +29,20 @@ class WalletService {
     public function createNewWallet(string $userId, array $data)
     {
         return DB::transaction(function () use ($userId, $data) {
-            
+            $currencyCode = $data['currency_code'] ?? null;
+            if (!$currencyCode) {
+                $currencyCode = DB::table('user_preferences')->where('user_id', $userId)->value('currency') ?? 'VND';
+            }
+
             // 1. Tạo ví mới cứng
             $wallet = $this->walletRepository->create([
-                'user_id'   => $userId,
-                'name'      => $data['name'],
-                'type'      => $data['type'],
-                'icon'      => $data['icon'] ?? null,
-                'color'     => $data['color'] ?? null,
-                'is_hidden' => $data['is_hidden'] ?? false,
+                'user_id'       => $userId,
+                'name'          => $data['name'],
+                'type'          => $data['type'],
+                'icon'          => $data['icon'] ?? null,
+                'color'         => $data['color'] ?? null,
+                'is_hidden'     => $data['is_hidden'] ?? false,
+                'currency_code' => $currencyCode,
             ]);
 
             // 2. Chọc sang bảng wallet_balances găm số dư khả dụng ban đầu
@@ -130,8 +140,17 @@ class WalletService {
                 throw new \Exception(__('messages.insufficient_balance'));
             }
 
-            // Lấy currency mặc định của user
-            $currency = DB::table('user_preferences')->where('user_id', $userId)->value('currency') ?? 'VND';
+            // Lấy timezone mặc định của user
+            $userTimezone = DB::table('user_preferences')->where('user_id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
+            $timezone = $data['timezone'] ?? $userTimezone;
+
+            // Lấy currency của 2 ví
+            $fromWalletCurrency = $fromWallet->currency_code ?? 'VND';
+            $toWalletCurrency = $toWallet->currency_code ?? 'VND';
+
+            // Tra cứu tỷ giá giữa 2 ví
+            $rate = $this->exchangeRateService->getRate($fromWalletCurrency, $toWalletCurrency);
+            $convertedAmount = (float) bcmul($amount, $rate, 4);
 
             $transferId = (string) Str::uuid7();
             $expenseId = (string) Str::uuid7();
@@ -146,13 +165,14 @@ class WalletService {
                 'type'             => 'expense',
                 'status'           => 'completed',
                 'amount'           => $amount,
-                'currency_code'    => $currency,
+                'currency_code'    => $fromWalletCurrency,
                 'exchange_rate'    => 1.000000,
                 'title'            => $notes ?? __('messages.transfer_out_title', ['name' => $toWallet->name]),
                 'notes'            => $notes,
                 'transaction_date' => now(),
                 'source_type'      => 'transfer',
                 'source_id'        => $transferId,
+                'timezone'         => $timezone,
                 'created_at'       => now(),
                 'updated_at'       => now()
             ]);
@@ -165,14 +185,15 @@ class WalletService {
                 'category_id'      => null,
                 'type'             => 'income',
                 'status'           => 'completed',
-                'amount'           => $amount,
-                'currency_code'    => $currency,
+                'amount'           => $convertedAmount,
+                'currency_code'    => $toWalletCurrency,
                 'exchange_rate'    => 1.000000,
                 'title'            => $notes ?? __('messages.transfer_in_title', ['name' => $fromWallet->name]),
                 'notes'            => $notes,
                 'transaction_date' => now(),
                 'source_type'      => 'transfer',
                 'source_id'        => $transferId,
+                'timezone'         => $timezone,
                 'created_at'       => now(),
                 'updated_at'       => now()
             ]);
@@ -186,6 +207,7 @@ class WalletService {
                 'expense_transaction_id' => $expenseId,
                 'income_transaction_id'  => $incomeId,
                 'transferred_at'         => now(),
+                'timezone'               => $timezone,
                 'created_at'             => now()
             ]);
 
@@ -197,7 +219,7 @@ class WalletService {
             ]);
 
             DB::table('wallet_balances')->where('wallet_id', $toWalletId)->update([
-                'available_balance'   => bcadd($toBalance->available_balance, $amount, 2),
+                'available_balance'   => bcadd($toBalance->available_balance, $convertedAmount, 2),
                 'last_transaction_id' => $incomeId,
                 'updated_at'          => now()
             ]);
@@ -207,6 +229,7 @@ class WalletService {
                 'expense_transaction_id' => $expenseId,
                 'income_transaction_id'  => $incomeId,
                 'amount'                 => $amount,
+                'converted_amount'       => $convertedAmount,
                 'from_wallet'            => $fromWallet->name,
                 'to_wallet'              => $toWallet->name
             ];
@@ -234,6 +257,7 @@ class WalletService {
                 'transactions.status',
                 'transactions.amount',
                 'transactions.currency_code',
+                'transactions.timezone',
                 'transactions.title',
                 'transactions.notes',
                 'transactions.transaction_date',

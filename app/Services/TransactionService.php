@@ -83,17 +83,20 @@ class TransactionService
                 }
             }
 
-            // Lấy currency từ cấu hình preferences hoặc VND mặc định
-            $userCurrency = DB::table('user_preferences')->where('user_id', $userId)->value('currency') ?? 'VND';
+            $walletCurrency = $wallet->currency_code ?? 'VND';
+
+            // Lấy timezone mặc định của user
+            $userTimezone = DB::table('user_preferences')->where('user_id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
+            $timezone = $data['timezone'] ?? $userTimezone;
 
             $transactionId = (string) Str::uuid7();
 
             // Phân giải tỷ giá hối đoái
-            $txCurrency = $data['currency_code'] ?? $userCurrency;
+            $txCurrency = $data['currency_code'] ?? $walletCurrency;
             if (isset($data['exchange_rate'])) {
                 $rate = (float) $data['exchange_rate'];
             } else {
-                $rate = $this->exchangeRateService->getRate($txCurrency, $userCurrency);
+                $rate = $this->exchangeRateService->getRate($txCurrency, $walletCurrency);
             }
 
             // Quy đổi số tiền sang đơn vị gốc của ví
@@ -133,6 +136,7 @@ class TransactionService
                 'exchange_rate' => $rate,
                 'title' => $data['title'],
                 'notes' => $data['notes'] ?? null,
+                'timezone' => $timezone,
                 'transaction_date' => $data['transaction_date'] ?? now(),
                 'source_type' => $data['source_type'] ?? 'manual',
                 'source_id' => $data['source_id'] ?? null
@@ -206,8 +210,12 @@ class TransactionService
             $oldType = $transaction->type;
             $newType = $data['type'] ?? $oldType;
 
-            // Lấy currency từ cấu hình preferences hoặc VND mặc định
-            $userCurrency = DB::table('user_preferences')->where('user_id', $userId)->value('currency') ?? 'VND';
+            // Lấy currency của new wallet và old wallet
+            $oldWallet = DB::table('wallets')->where('id', $oldWalletId)->first();
+            $oldWalletCurrency = $oldWallet->currency_code ?? 'VND';
+
+            $newWallet = DB::table('wallets')->where('id', $newWalletId)->first();
+            $newWalletCurrency = $newWallet->currency_code ?? 'VND';
 
             // Tính số tiền quy đổi cũ
             $oldRate = (float) ($transaction->exchange_rate ?? 1.000000);
@@ -219,7 +227,10 @@ class TransactionService
                 $newRate = (float) $data['exchange_rate'];
             } elseif (isset($data['currency_code']) && $data['currency_code'] !== $transaction->currency_code) {
                 // Nếu thay đổi loại tiền nhưng không truyền tỷ giá, tự động fetch tỷ giá mới
-                $newRate = $this->exchangeRateService->getRate($newCurrency, $userCurrency);
+                $newRate = $this->exchangeRateService->getRate($newCurrency, $newWalletCurrency);
+            } elseif ($newWalletCurrency !== $oldWalletCurrency) {
+                // Nếu thay đổi ví và ví mới có tiền tệ khác ví cũ, tự động quy đổi lại theo tiền tệ ví mới
+                $newRate = $this->exchangeRateService->getRate($newCurrency, $newWalletCurrency);
             } else {
                 $newRate = (float) ($transaction->exchange_rate ?? 1.000000);
             }
@@ -315,6 +326,7 @@ class TransactionService
                 'transaction_date' => $data['transaction_date'] ?? $transaction->transaction_date,
                 'currency_code' => $newCurrency,
                 'exchange_rate' => $newRate,
+                'timezone' => $data['timezone'] ?? $transaction->timezone,
                 'status' => $data['status'] ?? $transaction->status
             ]);
 

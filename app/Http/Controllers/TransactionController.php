@@ -77,6 +77,7 @@ class TransactionController extends Controller
                 'transaction_date' => 'nullable|date',
                 'currency_code'    => 'nullable|string|max:10',
                 'exchange_rate'    => 'nullable|numeric|min:0.000001',
+                'timezone'         => 'nullable|string|timezone',
                 'attachment'       => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400' // Tối đa 100MB
             ]);
 
@@ -138,6 +139,7 @@ class TransactionController extends Controller
                 'transaction_date' => 'sometimes|required|date',
                 'currency_code'    => 'nullable|string|max:10',
                 'exchange_rate'    => 'nullable|numeric|min:0.000001',
+                'timezone'         => 'nullable|string|timezone',
                 'attachment'       => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400'
             ]);
 
