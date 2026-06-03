@@ -80,4 +80,27 @@ return [
     'delete_category_failed' => 'Failed to delete custom category!',
     'merge_categories_success' => 'Merged expense categories and transferred all related transactions successfully!',
     'merge_categories_failed' => 'Failed to merge categories!',
+
+    // Transactions
+    'transaction_not_found_or_unauthorized' => 'Transaction does not exist or unauthorized!',
+    'category_not_found_or_unauthorized' => 'Category does not exist or unauthorized!',
+    'wallet_balance_not_found' => 'Corresponding wallet balance not found!',
+    'cannot_edit_transfer_directly' => 'Cannot modify transfer transactions directly! Please delete the transfer and recreate it.',
+    'get_transactions_list_success' => 'Retrieved transactions list successfully.',
+    'create_transaction_success' => 'Created transaction successfully.',
+    'get_transaction_detail_success' => 'Retrieved transaction details successfully.',
+    'update_transaction_success' => 'Updated transaction successfully.',
+    'delete_transaction_success' => 'Deleted transaction successfully.',
+
+    // Recurring Transactions
+    'recurring_rule_not_found_or_unauthorized' => 'Recurring rule does not exist or unauthorized!',
+    'get_recurring_rules_success' => 'Retrieved recurring rules successfully.',
+    'create_recurring_rule_success' => 'Created recurring rule successfully.',
+    'update_recurring_rule_success' => 'Updated recurring rule successfully.',
+    'delete_recurring_rule_success' => 'Deleted recurring rule successfully.',
+    'activate_recurring_rule_success' => 'Recurring rule activated successfully.',
+    'pause_recurring_rule_success' => 'Recurring rule paused successfully.',
+    'recurring_execution_insufficient_balance' => 'Insufficient wallet balance to execute recurring transaction (Method 2).',
+    'recurring_default_notes' => 'Recurring transaction automatically created from rule.',
 ];
+
