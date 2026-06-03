@@ -144,6 +144,7 @@ CREATE TABLE "wallets" (
   "user_id" uuid,
   "name" varchar,
   "type" wallet_type,
+  "currency_code" varchar(10) DEFAULT 'VND',
   "icon" varchar,
   "color" varchar,
   "is_hidden" bool,
@@ -167,6 +168,7 @@ CREATE TABLE "wallet_transfers" (
   "amount" decimal(18,2),
   "expense_transaction_id" uuid,
   "income_transaction_id" uuid,
+  "timezone" varchar(100) DEFAULT 'Asia/Ho_Chi_Minh',
   "transferred_at" timestamptz,
   "created_at" timestamptz
 );
@@ -199,6 +201,7 @@ CREATE TABLE "transactions" (
   "exchange_rate" decimal(18,6),
   "title" varchar,
   "notes" text,
+  "timezone" varchar(100) DEFAULT 'Asia/Ho_Chi_Minh',
   "transaction_date" timestamptz,
   "source_type" source_type,
   "source_id" uuid,

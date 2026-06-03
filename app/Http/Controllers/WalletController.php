@@ -53,6 +53,7 @@ class WalletController extends Controller {
                 'icon'              => 'nullable|string',
                 'color'             => 'nullable|string',
                 'is_hidden'         => 'nullable|boolean',
+                'currency_code'     => 'nullable|string|in:VND,USD,EUR,GBP,JPY',
                 'available_balance' => ['nullable', 'string', 'regex:/^\d+(\.\d{1,2})?$/'] // Hứng số dư nạp vào bảng phụ
             ]);
 
@@ -79,11 +80,12 @@ class WalletController extends Controller {
             }
 
             $validated = $request->validate([
-                'name'      => 'sometimes|required|string',
-                'type'      => 'sometimes|required|string',
-                'icon'      => 'nullable|string',
-                'color'     => 'nullable|string',
-                'is_hidden' => 'nullable|boolean'
+                'name'          => 'sometimes|required|string',
+                'type'          => 'sometimes|required|string',
+                'icon'          => 'nullable|string',
+                'color'         => 'nullable|string',
+                'is_hidden'     => 'nullable|boolean',
+                'currency_code' => 'sometimes|required|string|in:VND,USD,EUR,GBP,JPY'
             ]);
 
             $wallet = $this->walletService->updateWallet($id, $userId, $validated);
@@ -133,7 +135,8 @@ class WalletController extends Controller {
                 'from_wallet_id' => 'required|uuid',
                 'to_wallet_id'   => 'required|uuid',
                 'amount'         => 'required|numeric|min:0.01',
-                'notes'          => 'nullable|string|max:500'
+                'notes'          => 'nullable|string|max:500',
+                'timezone'       => 'nullable|string|timezone'
             ]);
 
             $result = $this->walletService->transferMoney($userId, $validated);
@@ -192,6 +195,8 @@ class WalletController extends Controller {
                     'from_wallet.name as from_wallet_name',
                     'to_wallet.name as to_wallet_name',
                     'wallet_transfers.amount',
+                    'wallet_transfers.timezone',
+                    'from_wallet.currency_code as currency_code',
                     'wallet_transfers.created_at as date'
                 ])
                 ->orderBy('wallet_transfers.created_at', 'desc')
@@ -204,6 +209,8 @@ class WalletController extends Controller {
                     'from_wallet_name' => $item->from_wallet_name,
                     'to_wallet_name'   => $item->to_wallet_name,
                     'amount'           => (float) $item->amount,
+                    'timezone'         => $item->timezone,
+                    'currency_code'    => $item->currency_code,
                     'date'             => \Illuminate\Support\Carbon::parse($item->date)->toIso8601String()
                 ];
             });

@@ -27,6 +27,7 @@ class Transaction extends Model
         'exchange_rate',
         'title',
         'notes',
+        'timezone',
         'transaction_date',
         'source_type',
         'source_id'
