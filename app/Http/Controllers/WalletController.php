@@ -171,4 +171,51 @@ class WalletController extends Controller {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 400);
         }
     }
+
+    //API 7: GET /api/wallets/transfers (Lịch sử chuyển tiền nội bộ của tất cả các ví)
+    public function getTransfers(Request $request)
+    {
+        try {
+            $userId = $request->attributes->get('user_id');
+
+            if (!$userId) {
+                return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
+            }
+
+            // Lấy tất cả lịch sử chuyển khoản nội bộ liên quan tới các ví thuộc sở hữu của user
+            $transfers = \Illuminate\Support\Facades\DB::table('wallet_transfers')
+                ->join('wallets as from_wallet', 'wallet_transfers.from_wallet_id', '=', 'from_wallet.id')
+                ->join('wallets as to_wallet', 'wallet_transfers.to_wallet_id', '=', 'to_wallet.id')
+                ->where('from_wallet.user_id', $userId)
+                ->select([
+                    'wallet_transfers.id',
+                    'from_wallet.name as from_wallet_name',
+                    'to_wallet.name as to_wallet_name',
+                    'wallet_transfers.amount',
+                    'wallet_transfers.created_at as date'
+                ])
+                ->orderBy('wallet_transfers.created_at', 'desc')
+                ->get();
+
+            // Format date chuẩn ISO 8601 để frontend parse dễ dàng
+            $transfers = $transfers->map(function ($item) {
+                return [
+                    'id'               => $item->id,
+                    'from_wallet_name' => $item->from_wallet_name,
+                    'to_wallet_name'   => $item->to_wallet_name,
+                    'amount'           => (float) $item->amount,
+                    'date'             => \Illuminate\Support\Carbon::parse($item->date)->toIso8601String()
+                ];
+            });
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Lấy lịch sử chuyển khoản nội bộ thành công!',
+                'data'    => $transfers
+            ], 200);
+
+        } catch (\Throwable $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 400);
+        }
+    }
 }

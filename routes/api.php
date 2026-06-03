@@ -26,6 +26,7 @@ Route::middleware(['custom.auth'])->group(function () {
     Route::get('/wallets', [WalletController::class, 'index']);
     Route::post('/wallets', [WalletController::class, 'store']);
     Route::post('/wallets/transfer', [WalletController::class, 'transfer']);
+    Route::get('/wallets/transfers', [WalletController::class, 'getTransfers']);
     Route::post('/wallets/{id}', [WalletController::class, 'update']);
     Route::delete('/wallets/{id}', [WalletController::class, 'destroy']);
     Route::get('/wallets/{id}/transactions', [WalletController::class, 'transactions']);
