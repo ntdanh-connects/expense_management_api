@@ -280,7 +280,7 @@ class AuthController extends Controller{
     public function updateAvatar(Request $request): JsonResponse
     {
         $request->validate([
-            'avatar' => 'required|image|mimes:jpeg,png,jpg,gif|max:20480' // Tối đa 20MB
+            'avatar' => 'required|image|mimes:jpeg,png,jpg,gif|max:102400' // Tối đa 100MB
         ]);
 
         try {
