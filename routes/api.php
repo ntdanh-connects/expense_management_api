@@ -25,18 +25,18 @@ Route::middleware(['custom.auth'])->group(function () {
     
     Route::get('/wallets', [WalletController::class, 'index']);
     Route::post('/wallets', [WalletController::class, 'store']);
+    Route::post('/wallets/transfer', [WalletController::class, 'transfer']);
     Route::post('/wallets/{id}', [WalletController::class, 'update']);
     Route::delete('/wallets/{id}', [WalletController::class, 'destroy']);
-    Route::post('/wallets/transfer', [WalletController::class, 'transfer']);
     Route::get('/wallets/{id}/transactions', [WalletController::class, 'transactions']);
 
     // Categories routes
     Route::get('/categories', [CategoryController::class, 'index']);
     Route::get('/categories/icons', [CategoryController::class, 'getIcons']);
     Route::post('/categories', [CategoryController::class, 'store']);
+    Route::post('/categories/merge', [CategoryController::class, 'merge']);
     Route::post('/categories/{id}', [CategoryController::class, 'update']);
     Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
-    Route::post('/categories/merge', [CategoryController::class, 'merge']);
 
     //Logut and logout all
     Route::post('/logout',[AuthController::class, 'logout']);
