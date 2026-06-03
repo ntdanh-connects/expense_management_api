@@ -80,4 +80,27 @@ return [
     'delete_category_failed' => 'Xóa danh mục tùy chỉnh thất bại!',
     'merge_categories_success' => 'Gộp danh mục chi tiêu và chuyển đổi toàn bộ giao dịch liên quan thành công!',
     'merge_categories_failed' => 'Gộp danh mục thất bại!',
+
+    // Transactions
+    'transaction_not_found_or_unauthorized' => 'Giao dịch không tồn tại hoặc không có quyền thao tác!',
+    'category_not_found_or_unauthorized' => 'Danh mục không tồn tại hoặc không có quyền thao tác!',
+    'wallet_balance_not_found' => 'Không tìm thấy số dư ví tương ứng!',
+    'cannot_edit_transfer_directly' => 'Không thể chỉnh sửa trực tiếp giao dịch chuyển khoản! Vui lòng xóa chuyển khoản và thực hiện lại.',
+    'get_transactions_list_success' => 'Lấy danh sách giao dịch thành công.',
+    'create_transaction_success' => 'Tạo giao dịch thành công.',
+    'get_transaction_detail_success' => 'Lấy chi tiết giao dịch thành công.',
+    'update_transaction_success' => 'Cập nhật giao dịch thành công.',
+    'delete_transaction_success' => 'Xóa giao dịch thành công.',
+
+    // Recurring Transactions
+    'recurring_rule_not_found_or_unauthorized' => 'Quy tắc định kỳ không tồn tại hoặc không có quyền thao tác!',
+    'get_recurring_rules_success' => 'Lấy danh sách quy tắc định kỳ thành công.',
+    'create_recurring_rule_success' => 'Tạo quy tắc định kỳ thành công.',
+    'update_recurring_rule_success' => 'Cập nhật quy tắc định kỳ thành công.',
+    'delete_recurring_rule_success' => 'Xóa quy tắc định kỳ thành công.',
+    'activate_recurring_rule_success' => 'Kích hoạt quy tắc thành công.',
+    'pause_recurring_rule_success' => 'Tạm dừng quy tắc thành công.',
+    'recurring_execution_insufficient_balance' => 'Không đủ số dư ví để thực thi giao dịch định kỳ (Phương án 2).',
+    'recurring_default_notes' => 'Giao dịch định kỳ tự động tạo từ quy tắc.',
 ];
+
