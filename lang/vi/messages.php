@@ -70,6 +70,8 @@ return [
     // Category controller messages
     'sync_categories_success' => 'Đồng bộ cây danh mục Momo thành công!',
     'get_categories_failed' => 'Lấy danh mục thất bại!',
+    'get_icons_success' => 'Lấy danh sách biểu tượng danh mục thành công!',
+    'get_icons_failed' => 'Lấy danh sách biểu tượng danh mục thất bại!',
     'create_category_success' => 'Tạo danh mục tùy chỉnh thành công!',
     'create_category_failed' => 'Tạo danh mục tùy chỉnh thất bại!',
     'update_category_success' => 'Cập nhật danh mục thành công!',

@@ -32,6 +32,7 @@ Route::middleware(['custom.auth'])->group(function () {
 
     // Categories routes
     Route::get('/categories', [CategoryController::class, 'index']);
+    Route::get('/categories/icons', [CategoryController::class, 'getIcons']);
     Route::post('/categories', [CategoryController::class, 'store']);
     Route::post('/categories/{id}', [CategoryController::class, 'update']);
     Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);

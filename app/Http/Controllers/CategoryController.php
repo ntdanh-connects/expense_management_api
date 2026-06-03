@@ -49,6 +49,29 @@ class CategoryController extends Controller
     }
 
     /**
+     * Lấy danh sách các biểu tượng được hỗ trợ cho danh mục tùy chỉnh (GET /api/categories/icons)
+     */
+    public function getIcons(Request $request): JsonResponse
+    {
+        try {
+            $icons = $this->categoryService->getSupportedIcons();
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => __('messages.get_icons_success'),
+                'data'    => $icons
+            ], 200);
+
+        } catch (\Throwable $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => __('messages.get_icons_failed'),
+                'error'   => $e->getMessage()
+            ], 400);
+        }
+    }
+
+    /**
      * Tạo danh mục tùy chỉnh mới (POST /api/categories)
      */
     public function store(Request $request): JsonResponse
@@ -67,7 +90,7 @@ class CategoryController extends Controller
             $validated = $request->validate([
                 'name'       => 'required|string|max:100',
                 'parent_id'  => 'required|uuid', // Momo yêu cầu tạo danh mục con thuộc nhóm cha
-                'icon'       => 'required|string|max:50',
+                'icon'       => ['required', 'string', 'max:50', \Illuminate\Validation\Rule::in($this->categoryService->getSupportedIcons())],
                 'color'      => ['required', 'string', 'regex:/^#([A-Fa-f0-9]{6})$/'], // Định dạng mã màu Hex chuẩn (#FF8F9C)
                 'sort_order' => 'nullable|integer'
             ]);
@@ -107,7 +130,7 @@ class CategoryController extends Controller
 
             $validated = $request->validate([
                 'name'       => 'sometimes|required|string|max:100',
-                'icon'       => 'sometimes|required|string|max:50',
+                'icon'       => ['sometimes', 'required', 'string', 'max:50', \Illuminate\Validation\Rule::in($this->categoryService->getSupportedIcons())],
                 'color'      => ['sometimes', 'required', 'string', 'regex:/^#([A-Fa-f0-9]{6})$/'],
                 'sort_order' => 'sometimes|required|integer'
             ]);

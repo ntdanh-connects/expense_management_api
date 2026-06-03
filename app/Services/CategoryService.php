@@ -366,4 +366,50 @@ class CategoryService
             ]);
         });
     }
+
+    /**
+     * Lấy danh sách các biểu tượng được hỗ trợ cho danh mục tự định nghĩa.
+     */
+    public function getSupportedIcons(): array
+    {
+        return [
+            // Default / Existing system icons
+            'food', 'car', 'shopping_cart', 'shopping_bag', 'gamepad', 
+            'beauty', 'health', 'heart', 'receipt', 'house', 
+            'users', 'chart', 'book', 'salary', 'award', 
+            'business', 'profit', 'debt', 'support',
+
+            // Row 1
+            'building', 'rings', 'grid', 'monitor', 'cash', 'coffee',
+            // Row 2
+            'baby_clothing', 'book_open', 'paw', 'dumbbell', 'baby_bottle',
+            // Row 3
+            'masks', 'beer', 'suitcase', 'tshirt', 'croissant',
+            // Row 4
+            'graduation_cap', 'water_drop_money', 'basket', 'cigarette', 'teddy_bear', 'bread',
+            // Row 5
+            'heart_paw', 'globe', 'hand_money', 'coffee_cup', 'money_bag', 'graduation_cap_alt',
+            // Row 6
+            'masks_alt', 'house_money', 'handshake', 'clapperboard', 'medical_shield', 'lightbulb',
+            // Row 7
+            'gas_station', 'gas_cylinder', 'flower', 'inbox_archive', 'heart_money',
+            // Row 8
+            'house_settings', 'desktop', 'shopping_cart_alt', 'hand_coin', 'piggy_bank',
+            // Row 9
+            'scissors', 'restaurant', 'ticket', 'motorcycle', 'dumbbell_alt', 'house_search',
+            // Row 10
+            'school', 'wallet_shield', 'car_settings', 'first_aid', 'parking', 'phone_call',
+            // Row 11
+            'baby_carriage', 'glove', 'car_shopping', 'train', 'chair', 'car_alt',
+            // Row 12
+            'bill', 'teddy_bear_alt', 'headphones', 'laptop', 'office_chair',
+            // Row 13
+            'medical_shield_alt', 'electricity', 'hand_heart', 'heart_plus', 'gift_box', 'spa',
+            // Row 14
+            'gift', 'airplane', 'chart_alt', 'wallet', 'water_drop',
+            // Row 15
+            'discount', 'bill_dollar', 'mobile_dollar', 'bank', 'network', 'parking_alt'
+        ];
+    }
 }
+

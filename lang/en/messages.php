@@ -70,6 +70,8 @@ return [
     // Category controller messages
     'sync_categories_success' => 'Synced Momo category tree successfully!',
     'get_categories_failed' => 'Failed to retrieve categories!',
+    'get_icons_success' => 'Retrieved supported category icons successfully!',
+    'get_icons_failed' => 'Failed to retrieve category icons!',
     'create_category_success' => 'Created custom category successfully!',
     'create_category_failed' => 'Failed to create custom category!',
     'update_category_success' => 'Updated category successfully!',
