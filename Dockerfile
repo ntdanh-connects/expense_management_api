@@ -32,9 +32,10 @@ COPY . .
 # 🔥 THẦN CHƯỞNG ĐÃ SỬA: Thêm cờ --ignore-platform-reqs để ép Composer cài mượt mà, chống nổ lỗi số 2
 RUN composer install --no-dev --optimize-autoloader --no-interaction --ignore-platform-reqs
 
-# Cấu hình quyền ghi cho thư mục lưu trữ của Laravel
+# Cấu hình quyền ghi cho thư mục lưu trữ của Laravel và Nginx temp folders
 RUN chmod -R 775 storage bootstrap/cache && \
-    chown -R www-data:www-data storage bootstrap/cache
+    chown -R www-data:www-data storage bootstrap/cache && \
+    chown -R www-data:www-data /var/lib/nginx
 
 # Copy file cấu hình Nginx và Supervisor vào đúng địa chỉ nhà hệ thống
 COPY ./docker/nginx.conf /etc/nginx/nginx.conf
@@ -44,8 +45,8 @@ COPY ./docker/supervisord.conf /etc/supervisord.conf
 RUN echo '#!/bin/sh' > /usr/local/bin/start.sh && \
     echo 'sed -i "s/LISTEN_PORT/${PORT}/g" /etc/nginx/nginx.conf' >> /usr/local/bin/start.sh && \
     echo 'php /var/www/html/artisan migrate --force' >> /usr/local/bin/start.sh && \
-    echo 'chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache' >> /usr/local/bin/start.sh && \
-    echo 'chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache' >> /usr/local/bin/start.sh && \
+    echo 'chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /var/lib/nginx' >> /usr/local/bin/start.sh && \
+    echo 'chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache /var/lib/nginx' >> /usr/local/bin/start.sh && \
     echo 'exec supervisord -c /etc/supervisord.conf' >> /usr/local/bin/start.sh && \
     chmod +x /usr/local/bin/start.sh
 
