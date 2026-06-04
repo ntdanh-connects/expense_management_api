@@ -150,7 +150,24 @@ class WalletService {
 
             // Tra cứu tỷ giá giữa 2 ví
             $rate = $this->exchangeRateService->getRate($fromWalletCurrency, $toWalletCurrency);
-            $convertedAmount = (float) bcmul($amount, $rate, 4);
+            $convertedAmount = (float) bcmul(number_format($amount, 4, '.', ''), number_format($rate, 6, '.', ''), 4);
+
+            // Quy đổi số tiền sang tiền tệ hiển thị của user (amount_in_user_currency)
+            $userCurrency = DB::table('user_preferences')->where('user_id', $userId)->value('currency') ?? 'VND';
+            
+            if ($fromWalletCurrency === $userCurrency) {
+                $expenseAmountInUserCurrency = $amount;
+            } else {
+                $fromRateToUser = $this->exchangeRateService->getRate($fromWalletCurrency, $userCurrency);
+                $expenseAmountInUserCurrency = (float) bcmul(number_format($amount, 4, '.', ''), number_format($fromRateToUser, 6, '.', ''), 4);
+            }
+
+            if ($toWalletCurrency === $userCurrency) {
+                $incomeAmountInUserCurrency = $convertedAmount;
+            } else {
+                $toRateToUser = $this->exchangeRateService->getRate($toWalletCurrency, $userCurrency);
+                $incomeAmountInUserCurrency = (float) bcmul(number_format($convertedAmount, 4, '.', ''), number_format($toRateToUser, 6, '.', ''), 4);
+            }
 
             $transferId = (string) Str::uuid7();
             $expenseId = (string) Str::uuid7();
@@ -158,44 +175,46 @@ class WalletService {
 
             // 4. Tạo giao dịch đối ứng 1: Chi tiền (Expense) từ ví nguồn
             DB::table('transactions')->insert([
-                'id'               => $expenseId,
-                'user_id'          => $userId,
-                'wallet_id'        => $fromWalletId,
-                'category_id'      => null, // Chuyển khoản không ghi nhận vào danh mục chi tiêu bình thường
-                'type'             => 'expense',
-                'status'           => 'completed',
-                'amount'           => $amount,
-                'currency_code'    => $fromWalletCurrency,
-                'exchange_rate'    => 1.000000,
-                'title'            => $notes ?? __('messages.transfer_out_title', ['name' => $toWallet->name]),
-                'notes'            => $notes,
-                'transaction_date' => now(),
-                'source_type'      => 'transfer',
-                'source_id'        => $transferId,
-                'timezone'         => $timezone,
-                'created_at'       => now(),
-                'updated_at'       => now()
+                'id'                      => $expenseId,
+                'user_id'                 => $userId,
+                'wallet_id'               => $fromWalletId,
+                'category_id'             => null, // Chuyển khoản không ghi nhận vào danh mục chi tiêu bình thường
+                'type'                    => 'expense',
+                'status'                  => 'completed',
+                'amount'                  => $amount,
+                'currency_code'           => $fromWalletCurrency,
+                'exchange_rate'           => 1.000000,
+                'amount_in_user_currency' => $expenseAmountInUserCurrency,
+                'title'                   => $notes ?? __('messages.transfer_out_title', ['name' => $toWallet->name]),
+                'notes'                   => $notes,
+                'transaction_date'        => now(),
+                'source_type'             => 'transfer',
+                'source_id'               => $transferId,
+                'timezone'                => $timezone,
+                'created_at'              => now(),
+                'updated_at'              => now()
             ]);
 
             // 5. Tạo giao dịch đối ứng 2: Thu tiền (Income) vào ví đích
             DB::table('transactions')->insert([
-                'id'               => $incomeId,
-                'user_id'          => $userId,
-                'wallet_id'        => $toWalletId,
-                'category_id'      => null,
-                'type'             => 'income',
-                'status'           => 'completed',
-                'amount'           => $convertedAmount,
-                'currency_code'    => $toWalletCurrency,
-                'exchange_rate'    => 1.000000,
-                'title'            => $notes ?? __('messages.transfer_in_title', ['name' => $fromWallet->name]),
-                'notes'            => $notes,
-                'transaction_date' => now(),
-                'source_type'      => 'transfer',
-                'source_id'        => $transferId,
-                'timezone'         => $timezone,
-                'created_at'       => now(),
-                'updated_at'       => now()
+                'id'                      => $incomeId,
+                'user_id'                 => $userId,
+                'wallet_id'               => $toWalletId,
+                'category_id'             => null,
+                'type'                    => 'income',
+                'status'                  => 'completed',
+                'amount'                  => $convertedAmount,
+                'currency_code'           => $toWalletCurrency,
+                'exchange_rate'           => 1.000000,
+                'amount_in_user_currency' => $incomeAmountInUserCurrency,
+                'title'                   => $notes ?? __('messages.transfer_in_title', ['name' => $fromWallet->name]),
+                'notes'                   => $notes,
+                'transaction_date'        => now(),
+                'source_type'             => 'transfer',
+                'source_id'               => $transferId,
+                'timezone'                => $timezone,
+                'created_at'              => now(),
+                'updated_at'              => now()
             ]);
 
             // 6. Ghi nhận giao dịch chuyển khoản vào bảng wallet_transfers
