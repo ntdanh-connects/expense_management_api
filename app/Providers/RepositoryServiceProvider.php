@@ -22,6 +22,7 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->app->bind(CategoryRepositoryInterface::class, CategoryRepository::class);
         $this->app->bind(\App\Repositories\Contracts\TransactionRepositoryInterface::class, \App\Repositories\Eloquent\TransactionRepository::class);
         $this->app->bind(\App\Repositories\Contracts\RecurringRuleRepositoryInterface::class, \App\Repositories\Eloquent\RecurringRuleRepository::class);
+        $this->app->bind(\App\Repositories\Contracts\BudgetRepositoryInterface::class, \App\Repositories\Eloquent\BudgetRepository::class);
     }
 
     /**
