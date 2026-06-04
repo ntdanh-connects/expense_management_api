@@ -21,6 +21,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Events\TransactionSaved::class,
+            \App\Listeners\UpdateBudgetUsage::class
+        );
     }
 }

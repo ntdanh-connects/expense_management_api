@@ -220,6 +220,7 @@ class RecurringTransactionService
                         'amount' => $amount,
                         'currency_code' => $userCurrency,
                         'exchange_rate' => 1.000000,
+                        'amount_in_user_currency' => $amount,
                         'title' => $rule->title,
                         'notes' => __('messages.recurring_default_notes'),
                         'transaction_date' => now(),
@@ -233,6 +234,9 @@ class RecurringTransactionService
                         'last_transaction_id' => $transactionId,
                         'updated_at' => now()
                     ]);
+
+                    // Bắn sự kiện TransactionSaved
+                    event(new \App\Events\TransactionSaved($transaction));
 
                     // Ghi lịch sử chạy thành công
                     RecurringExecution::create([

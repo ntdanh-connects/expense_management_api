@@ -478,6 +478,8 @@ class UserService
 
             if (!empty($preferenceData)) {
                 $preference = $user->preference;
+                $oldCurrency = $preference ? $preference->currency : 'VND';
+
                 if (!$preference) {
                     $user->preference()->create(array_merge([
                         'language'            => 'vi',
@@ -487,8 +489,15 @@ class UserService
                         'financial_start_day' => 1,
                         'created_at'          => now()
                     ], $preferenceData));
+                    $oldCurrency = 'VND';
                 } else {
                     $preference->update($preferenceData);
+                }
+
+                $newCurrency = $preferenceData['currency'] ?? null;
+                if ($newCurrency && strtoupper($newCurrency) !== strtoupper($oldCurrency)) {
+                    // Dispatch Job chạy ngầm để tính toán lại tỷ giá và ngân sách theo đồng tiền mới
+                    \App\Jobs\RecalculateUserCurrenciesJob::dispatch($userId, $newCurrency);
                 }
             }
 

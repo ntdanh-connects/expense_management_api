@@ -100,7 +100,16 @@ class TransactionService
             }
 
             // Quy đổi số tiền sang đơn vị gốc của ví
-            $appliedAmount = (float) bcmul($amount, $rate, 4);
+            $appliedAmount = (float) bcmul((string)$amount, sprintf('%.6f', $rate), 4);
+
+            // Quy đổi số tiền sang tiền tệ hiển thị của user (amount_in_user_currency)
+            $userCurrency = DB::table('user_preferences')->where('user_id', $userId)->value('currency') ?? 'VND';
+            if ($txCurrency === $userCurrency) {
+                $amountInUserCurrency = $amount;
+            } else {
+                $rateToUserCurrency = $this->exchangeRateService->getRate($txCurrency, $userCurrency);
+                $amountInUserCurrency = (float) bcmul((string)$amount, sprintf('%.6f', $rateToUserCurrency), 4);
+            }
 
             // 3. Khóa bảng số dư để cập nhật chống race conditions
             $walletBalance = DB::table('wallet_balances')
@@ -134,6 +143,7 @@ class TransactionService
                 'amount' => $amount,
                 'currency_code' => $txCurrency,
                 'exchange_rate' => $rate,
+                'amount_in_user_currency' => $amountInUserCurrency,
                 'title' => $data['title'],
                 'notes' => $data['notes'] ?? null,
                 'timezone' => $timezone,
@@ -178,6 +188,9 @@ class TransactionService
                 'changed_by' => $userId
             ]);
 
+            // Bắn sự kiện TransactionSaved
+            event(new \App\Events\TransactionSaved($transaction));
+
             return $transaction->load('category', 'wallet', 'attachments');
         });
     }
@@ -219,7 +232,7 @@ class TransactionService
 
             // Tính số tiền quy đổi cũ
             $oldRate = (float) ($transaction->exchange_rate ?? 1.000000);
-            $oldAppliedAmount = (float) bcmul($oldAmount, $oldRate, 4);
+            $oldAppliedAmount = (float) bcmul((string)$oldAmount, sprintf('%.6f', $oldRate), 4);
 
             // Tính số tiền quy đổi mới
             $newCurrency = $data['currency_code'] ?? $transaction->currency_code;
@@ -234,7 +247,16 @@ class TransactionService
             } else {
                 $newRate = (float) ($transaction->exchange_rate ?? 1.000000);
             }
-            $newAppliedAmount = (float) bcmul($newAmount, $newRate, 4);
+            $newAppliedAmount = (float) bcmul((string)$newAmount, sprintf('%.6f', $newRate), 4);
+
+            // Quy đổi số tiền sang tiền tệ hiển thị của user (amount_in_user_currency)
+            $userCurrency = DB::table('user_preferences')->where('user_id', $userId)->value('currency') ?? 'VND';
+            if ($newCurrency === $userCurrency) {
+                $newAmountInUserCurrency = $newAmount;
+            } else {
+                $rateToUserCurrency = $this->exchangeRateService->getRate($newCurrency, $userCurrency);
+                $newAmountInUserCurrency = (float) bcmul((string)$newAmount, sprintf('%.6f', $rateToUserCurrency), 4);
+            }
 
             // 1. Kiểm tra ví mới nếu thay đổi ví
             if ($newWalletId !== $oldWalletId) {
@@ -321,6 +343,7 @@ class TransactionService
                 'category_id' => $data['category_id'] ?? $transaction->category_id,
                 'type' => $newType,
                 'amount' => $newAmount,
+                'amount_in_user_currency' => $newAmountInUserCurrency,
                 'title' => $data['title'] ?? $transaction->title,
                 'notes' => $data['notes'] ?? $transaction->notes,
                 'transaction_date' => $data['transaction_date'] ?? $transaction->transaction_date,
@@ -367,6 +390,9 @@ class TransactionService
                 'changed_by' => $userId
             ]);
 
+            // Bắn sự kiện TransactionSaved
+            event(new \App\Events\TransactionSaved($transaction, $oldData));
+
             return $transaction->load('category', 'wallet', 'attachments');
         });
     }
@@ -404,7 +430,7 @@ class TransactionService
                             ->first();
 
                         if ($exWalletBalance) {
-                            $appliedExAmount = (float) bcmul($expenseTx->amount, $expenseTx->exchange_rate ?? 1.000000, 4);
+                            $appliedExAmount = (float) bcmul((string)$expenseTx->amount, sprintf('%.6f', $expenseTx->exchange_rate ?? 1.000000), 4);
                             DB::table('wallet_balances')->where('wallet_id', $expenseTx->wallet_id)->update([
                                 'available_balance' => bcadd($exWalletBalance->available_balance, $appliedExAmount, 2),
                                 'updated_at' => now()
@@ -435,7 +461,7 @@ class TransactionService
                             ->first();
 
                         if ($inWalletBalance) {
-                            $appliedInAmount = (float) bcmul($incomeTx->amount, $incomeTx->exchange_rate ?? 1.000000, 4);
+                            $appliedInAmount = (float) bcmul((string)$incomeTx->amount, sprintf('%.6f', $incomeTx->exchange_rate ?? 1.000000), 4);
                             DB::table('wallet_balances')->where('wallet_id', $incomeTx->wallet_id)->update([
                                 'available_balance' => bcsub($inWalletBalance->available_balance, $appliedInAmount, 2),
                                 'updated_at' => now()
@@ -462,6 +488,14 @@ class TransactionService
                     // Xóa bản ghi trong wallet_transfers
                     DB::table('wallet_transfers')->where('id', $transfer->id)->delete();
 
+                    // Bắn sự kiện TransactionSaved cho cả 2 giao dịch bị xóa
+                    if ($expenseTx) {
+                        event(new \App\Events\TransactionSaved($expenseTx, null, true));
+                    }
+                    if ($incomeTx) {
+                        event(new \App\Events\TransactionSaved($incomeTx, null, true));
+                    }
+
                     return true;
                 }
             }
@@ -474,7 +508,7 @@ class TransactionService
 
             if ($walletBalance) {
                 // Quy đổi số tiền cần hoàn trả bằng tỷ giá đã lưu của chính giao dịch đó
-                $appliedAmount = (float) bcmul($transaction->amount, $transaction->exchange_rate ?? 1.000000, 4);
+                $appliedAmount = (float) bcmul((string)$transaction->amount, sprintf('%.6f', $transaction->exchange_rate ?? 1.000000), 4);
 
                 $revertedBalance = 0;
                 if ($transaction->type === 'expense') {
@@ -506,6 +540,9 @@ class TransactionService
 
             // Soft delete giao dịch
             $transaction->delete();
+
+            // Bắn sự kiện TransactionSaved
+            event(new \App\Events\TransactionSaved($transaction, $oldData, true));
 
             return true;
         });

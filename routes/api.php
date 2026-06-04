@@ -8,6 +8,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\RecurringRuleController;
 use App\Http\Controllers\PreferenceOptionsController;
+use App\Http\Controllers\BudgetController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::get('/verify-email/{id}/{hash}', [AuthController::class, 'verify'])
@@ -56,6 +57,12 @@ Route::middleware(['custom.auth'])->group(function () {
     Route::post('/categories/merge', [CategoryController::class, 'merge']);
     Route::post('/categories/{id}', [CategoryController::class, 'update']);
     Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
+
+    // Budget routes
+    Route::get('/budgets', [BudgetController::class, 'index']);
+    Route::post('/budgets', [BudgetController::class, 'store']);
+    Route::delete('/budgets/{id}', [BudgetController::class, 'destroy']);
+    Route::post('/budgets/copy', [BudgetController::class, 'copy']);
 
     //Logut and logout all
     Route::post('/logout',[AuthController::class, 'logout']);

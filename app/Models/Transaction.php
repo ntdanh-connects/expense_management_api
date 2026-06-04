@@ -25,6 +25,7 @@ class Transaction extends Model
         'amount',
         'currency_code',
         'exchange_rate',
+        'amount_in_user_currency',
         'title',
         'notes',
         'timezone',
@@ -36,6 +37,7 @@ class Transaction extends Model
     protected $casts = [
         'amount' => 'decimal:2',
         'exchange_rate' => 'decimal:6',
+        'amount_in_user_currency' => 'decimal:2',
         'transaction_date' => 'datetime',
     ];
 
