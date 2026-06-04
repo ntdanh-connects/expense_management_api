@@ -14,7 +14,7 @@ RUN apk update && apk add --no-cache \
     curl
 
 # Cài đặt các PHP extensions bắt buộc cho Laravel, PostgreSQL và xử lý file zip
-RUN docker-php-ext-install pdo pdo_pgsql zip
+RUN docker-php-ext-install pdo pdo_pgsql zip bcmath
 
 # Cấu hình PHP để cho phép upload file kích thước lớn (tối đa 100MB)
 RUN echo "upload_max_filesize = 100M" > /usr/local/etc/php/conf.d/uploads.ini && \
