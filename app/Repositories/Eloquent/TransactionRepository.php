@@ -91,9 +91,9 @@ class TransactionRepository extends BaseRepository implements TransactionReposit
             $query->orderBy($sortColumn, $order);
         }
 
-        // Luôn sắp xếp phụ theo id hoặc created_at để tránh trùng lặp khi phân trang
-        $query->orderBy('transactions.created_at', 'desc');
+        // Luôn sắp xếp phụ theo id để đảm bảo tính duy nhất tuyệt đối cho cursor
+        $query->orderBy('transactions.id', 'desc');
 
-        return $query->paginate($perPage);
+        return $query->cursorPaginate($perPage);
     }
 }
