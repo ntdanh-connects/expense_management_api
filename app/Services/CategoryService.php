@@ -196,6 +196,8 @@ class CategoryService
             [
                 'name' => 'Chi tiêu - sinh hoạt',
                 'type' => 'expense',
+                'icon' => 'food',
+                'color' => '#FF8F9C',
                 'sort_order' => 1,
                 'children' => [
                     ['name' => 'Ăn uống', 'icon' => 'food', 'color' => '#FF8F9C', 'sort_order' => 1],
@@ -206,6 +208,8 @@ class CategoryService
             [
                 'name' => 'Chi phí phát sinh',
                 'type' => 'expense',
+                'icon' => 'gamepad',
+                'color' => '#E99BFF',
                 'sort_order' => 2,
                 'children' => [
                     ['name' => 'Mua sắm', 'icon' => 'shopping_bag', 'color' => '#FF8F9C', 'sort_order' => 1],
@@ -218,6 +222,8 @@ class CategoryService
             [
                 'name' => 'Chi phí cố định',
                 'type' => 'expense',
+                'icon' => 'house',
+                'color' => '#9BAFFF',
                 'sort_order' => 3,
                 'children' => [
                     ['name' => 'Hóa đơn', 'icon' => 'receipt', 'color' => '#9BFFE5', 'sort_order' => 1],
@@ -228,6 +234,8 @@ class CategoryService
             [
                 'name' => 'Đầu tư - tiết kiệm',
                 'type' => 'expense',
+                'icon' => 'chart',
+                'color' => '#9BFFB2',
                 'sort_order' => 4,
                 'children' => [
                     ['name' => 'Đầu tư', 'icon' => 'chart', 'color' => '#9BFFB2', 'sort_order' => 1],
@@ -237,6 +245,8 @@ class CategoryService
             [
                 'name' => 'Thu nhập',
                 'type' => 'income',
+                'icon' => 'salary',
+                'color' => '#9BE5FF',
                 'sort_order' => 5,
                 'children' => [
                     ['name' => 'Lương', 'icon' => 'salary', 'color' => '#9BE5FF', 'sort_order' => 1],
@@ -260,8 +270,8 @@ class CategoryService
                     'parent_id'  => null,
                     'type'       => $parentData['type'],
                     'name'       => $parentData['name'],
-                    'icon'       => null,
-                    'color'      => null,
+                    'icon'       => $parentData['icon'] ?? null,
+                    'color'      => $parentData['color'] ?? null,
                     'sort_order' => $parentData['sort_order'],
                     'is_default' => true,
                     'created_at' => now(),
