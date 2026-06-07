@@ -48,22 +48,7 @@ class TransactionAttachment extends Model
 
     public function getFileUrlAttribute($value)
     {
-        if ($this->storage_provider_enum === 's3' && $value) {
-            $parsedUrl = parse_url($value);
-            if (isset($parsedUrl['path'])) {
-                $path = ltrim($parsedUrl['path'], '/');
-                $bucketName = config('filesystems.disks.s3.bucket');
-                if ($bucketName && str_starts_with($path, $bucketName . '/')) {
-                    $path = substr($path, strlen($bucketName . '/'));
-                }
-                try {
-                    return \Illuminate\Support\Facades\Storage::disk('s3')->temporaryUrl($path, now()->addHours(24));
-                } catch (\Exception $e) {
-                    return $value;
-                }
-            }
-        }
-        return $value;
+        return app(\App\Services\ImageUploadService::class)->getPresignedUrl($value);
     }
 }
 

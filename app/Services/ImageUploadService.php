@@ -88,4 +88,39 @@ class ImageUploadService
 
         return false;
     }
+
+    /**
+     * Sinh Presigned URL (Temporary URL) cho ảnh trên S3.
+     *
+     * @param string|null $imageUrl URL S3 tĩnh cần ký
+     * @param int $expirationMinutes Thời gian hết hạn tính bằng phút
+     * @return string|null URL đã được ký hoặc URL gốc nếu không dùng S3
+     */
+    public function getPresignedUrl(?string $imageUrl, int $expirationMinutes = 1440): ?string
+    {
+        if (!$imageUrl) {
+            return null;
+        }
+
+        // Kiểm tra xem URL có thuộc S3 hay không
+        if (str_contains($imageUrl, '.amazonaws.com') || str_contains($imageUrl, 's3.')) {
+            $parsedUrl = parse_url($imageUrl);
+            if (isset($parsedUrl['path'])) {
+                $path = ltrim($parsedUrl['path'], '/');
+                $bucketName = config('filesystems.disks.s3.bucket');
+                if ($bucketName && str_starts_with($path, $bucketName . '/')) {
+                    $path = substr($path, strlen($bucketName . '/'));
+                }
+                try {
+                    return Storage::disk('s3')->temporaryUrl($path, now()->addMinutes($expirationMinutes));
+                } catch (\Exception $e) {
+                    // Fallback trả về URL gốc nếu lỗi
+                    return $imageUrl;
+                }
+            }
+        }
+
+        return $imageUrl;
+    }
 }
+
