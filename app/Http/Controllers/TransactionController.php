@@ -78,10 +78,12 @@ class TransactionController extends Controller
                 'currency_code'    => 'nullable|string|max:10',
                 'exchange_rate'    => 'nullable|numeric|min:0.000001',
                 'timezone'         => 'nullable|string|timezone',
-                'attachment'       => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400' // Tối đa 100MB
+                'attachment'       => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400', // Tối đa 100MB
+                'attachments'      => 'nullable|array',
+                'attachments.*'    => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400'
             ]);
 
-            $transaction = $this->transactionService->createTransaction($userId, $validated, $request->file('attachment'));
+            $transaction = $this->transactionService->createTransaction($userId, $validated, $request->file('attachment'), $request->file('attachments'));
 
             return response()->json([
                 'status'  => 'success',
@@ -140,10 +142,12 @@ class TransactionController extends Controller
                 'currency_code'    => 'nullable|string|max:10',
                 'exchange_rate'    => 'nullable|numeric|min:0.000001',
                 'timezone'         => 'nullable|string|timezone',
-                'attachment'       => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400'
+                'attachment'       => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400',
+                'attachments'      => 'nullable|array',
+                'attachments.*'    => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400'
             ]);
 
-            $transaction = $this->transactionService->updateTransaction($id, $userId, $validated, $request->file('attachment'));
+            $transaction = $this->transactionService->updateTransaction($id, $userId, $validated, $request->file('attachment'), $request->file('attachments'));
 
             return response()->json([
                 'status'  => 'success',

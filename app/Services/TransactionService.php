@@ -48,9 +48,9 @@ class TransactionService
     /**
      * Tạo giao dịch thủ công kèm đính kèm
      */
-    public function createTransaction(string $userId, array $data, ?UploadedFile $attachment = null)
+    public function createTransaction(string $userId, array $data, ?UploadedFile $attachment = null, ?array $attachments = null)
     {
-        return DB::transaction(function () use ($userId, $data, $attachment) {
+        return DB::transaction(function () use ($userId, $data, $attachment, $attachments) {
             $walletId = $data['wallet_id'];
             $categoryId = $data['category_id'] ?? null;
             $amount = (float) $data['amount'];
@@ -160,22 +160,33 @@ class TransactionService
             ]);
 
             // 5. Xử lý đính kèm nếu có
+            $filesToUpload = [];
             if ($attachment) {
-                $fileUrl = $this->imageUploadService->uploadToS3($attachment, 'receipts');
+                $filesToUpload[] = $attachment;
+            }
+            if ($attachments) {
+                foreach ($attachments as $file) {
+                    if ($file instanceof UploadedFile) {
+                        $filesToUpload[] = $file;
+                    }
+                }
+            }
 
-                $s3Key = config('filesystems.disks.s3.key');
-                $s3Secret = config('filesystems.disks.s3.secret');
-                $s3Bucket = config('filesystems.disks.s3.bucket');
-                $provider = (!empty($s3Key) && !empty($s3Secret) && !empty($s3Bucket)) ? 's3' : 'local';
+            $s3Key = config('filesystems.disks.s3.key');
+            $s3Secret = config('filesystems.disks.s3.secret');
+            $s3Bucket = config('filesystems.disks.s3.bucket');
+            $provider = (!empty($s3Key) && !empty($s3Secret) && !empty($s3Bucket)) ? 's3' : 'local';
 
+            foreach ($filesToUpload as $file) {
+                $fileUrl = $this->imageUploadService->uploadToS3($file, 'receipts');
                 TransactionAttachment::create([
                     'id' => (string) Str::uuid7(),
                     'transaction_id' => $transactionId,
                     'storage_provider_enum' => $provider,
                     'file_key' => $fileUrl, // Lưu URL trực tiếp vào key để deleteFromS3 phân tích cú pháp
                     'file_url' => $fileUrl,
-                    'mime_type' => $attachment->getClientMimeType(),
-                    'file_size' => $attachment->getSize(),
+                    'mime_type' => $file->getClientMimeType(),
+                    'file_size' => $file->getSize(),
                     'uploaded_at' => now()
                 ]);
             }
@@ -198,9 +209,9 @@ class TransactionService
     /**
      * Sửa giao dịch
      */
-    public function updateTransaction(string $id, string $userId, array $data, ?UploadedFile $attachment = null)
+    public function updateTransaction(string $id, string $userId, array $data, ?UploadedFile $attachment = null, ?array $attachments = null)
     {
-        return DB::transaction(function () use ($id, $userId, $data, $attachment) {
+        return DB::transaction(function () use ($id, $userId, $data, $attachment, $attachments) {
             $transaction = Transaction::find($id);
 
             if (!$transaction || $transaction->user_id !== $userId) {
@@ -354,7 +365,19 @@ class TransactionService
             ]);
 
             // 5. Cập nhật đính kèm
+            $filesToUpload = [];
             if ($attachment) {
+                $filesToUpload[] = $attachment;
+            }
+            if ($attachments) {
+                foreach ($attachments as $file) {
+                    if ($file instanceof UploadedFile) {
+                        $filesToUpload[] = $file;
+                    }
+                }
+            }
+
+            if (!empty($filesToUpload)) {
                 // Xóa đính kèm cũ (nếu có)
                 $oldAttachments = TransactionAttachment::where('transaction_id', $id)->get();
                 foreach ($oldAttachments as $oldAttach) {
@@ -362,24 +385,25 @@ class TransactionService
                     $oldAttach->delete();
                 }
 
-                // Upload đính kèm mới
-                $fileUrl = $this->imageUploadService->uploadToS3($attachment, 'receipts');
-
                 $s3Key = config('filesystems.disks.s3.key');
                 $s3Secret = config('filesystems.disks.s3.secret');
                 $s3Bucket = config('filesystems.disks.s3.bucket');
                 $provider = (!empty($s3Key) && !empty($s3Secret) && !empty($s3Bucket)) ? 's3' : 'local';
 
-                TransactionAttachment::create([
-                    'id' => (string) Str::uuid7(),
-                    'transaction_id' => $id,
-                    'storage_provider_enum' => $provider,
-                    'file_key' => $fileUrl,
-                    'file_url' => $fileUrl,
-                    'mime_type' => $attachment->getClientMimeType(),
-                    'file_size' => $attachment->getSize(),
-                    'uploaded_at' => now()
-                ]);
+                foreach ($filesToUpload as $file) {
+                    // Upload đính kèm mới
+                    $fileUrl = $this->imageUploadService->uploadToS3($file, 'receipts');
+                    TransactionAttachment::create([
+                        'id' => (string) Str::uuid7(),
+                        'transaction_id' => $id,
+                        'storage_provider_enum' => $provider,
+                        'file_key' => $fileUrl,
+                        'file_url' => $fileUrl,
+                        'mime_type' => $file->getClientMimeType(),
+                        'file_size' => $file->getSize(),
+                        'uploaded_at' => now()
+                    ]);
+                }
             }
 
             // 6. Ghi log audit
