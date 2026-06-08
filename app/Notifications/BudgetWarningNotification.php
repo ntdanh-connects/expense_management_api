@@ -28,7 +28,7 @@ class BudgetWarningNotification extends Notification
     public function via(object $notifiable): array
     {
         // Gửi cả email và lưu vào database cho in-app notifications (Module 8)
-        return ['mail', 'database'];
+        return ['mail', \App\Channels\CustomDbChannel::class];
     }
 
     /**

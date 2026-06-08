@@ -25,6 +25,7 @@ class RecurringRule extends Model
         'title',
         'frequency',
         'interval_value',
+        'start_date',
         'next_run_at',
         'end_at',
         'is_active'
@@ -33,6 +34,7 @@ class RecurringRule extends Model
     protected $casts = [
         'amount' => 'decimal:2',
         'interval_value' => 'integer',
+        'start_date' => 'datetime',
         'next_run_at' => 'datetime',
         'end_at' => 'datetime',
         'is_active' => 'boolean',

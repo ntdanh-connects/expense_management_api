@@ -70,6 +70,7 @@ class RecurringTransactionService
         }
 
         // 3. Tạo luật định kỳ
+        $nextRun = $data['next_run_at'] ?? now();
         return RecurringRule::create([
             'user_id' => $userId,
             'wallet_id' => $data['wallet_id'],
@@ -79,7 +80,8 @@ class RecurringTransactionService
             'title' => $data['title'],
             'frequency' => $data['frequency'], // daily, weekly, monthly, yearly
             'interval_value' => $data['interval_value'] ?? 1,
-            'next_run_at' => $data['next_run_at'] ?? now(),
+            'start_date' => $data['start_date'] ?? $nextRun,
+            'next_run_at' => $nextRun,
             'end_at' => $data['end_at'] ?? null,
             'is_active' => $data['is_active'] ?? true
         ]);
@@ -162,122 +164,146 @@ class RecurringTransactionService
         $executedCount = 0;
 
         foreach ($dueRules as $rule) {
-            try {
-                DB::transaction(function () use ($rule, &$executedCount) {
-                    $ruleId = $rule->id;
-                    $userId = $rule->user_id;
-                    $walletId = $rule->wallet_id;
-                    $amount = (float) $rule->amount;
-                    $type = $rule->type;
+            $user = $rule->user;
+            if (!$user) {
+                Log::warning("Không tìm thấy user cho rule {$rule->id}, bỏ qua.");
+                continue;
+            }
 
-                    // 1. Khóa bảng số dư của ví
-                    $walletBalance = DB::table('wallet_balances')
-                        ->where('wallet_id', $walletId)
-                        ->lockForUpdate()
-                        ->first();
+            while ($rule->is_active && $rule->next_run_at->lte(now())) {
+                $currentRunAt = $rule->next_run_at;
 
-                    if (!$walletBalance) {
-                        throw new \Exception(__('messages.wallet_balance_not_found'));
-                    }
+                try {
+                    $result = DB::transaction(function () use ($rule, $currentRunAt) {
+                        $ruleId = $rule->id;
+                        $userId = $rule->user_id;
+                        $walletId = $rule->wallet_id;
+                        $amount = (float) $rule->amount;
+                        $type = $rule->type;
 
-                    // 2. PHƯƠNG ÁN 2: Kiểm tra số dư ví nếu là giao dịch Chi tiêu (Expense)
-                    if ($type === 'expense' && bccomp($walletBalance->available_balance, $amount, 2) === -1) {
-                        // Ghi nhận lịch sử chạy thất bại và tiếp tục
+                        // 1. Khóa bảng số dư của ví
+                        $walletBalance = DB::table('wallet_balances')
+                            ->where('wallet_id', $walletId)
+                            ->lockForUpdate()
+                            ->first();
+
+                        if (!$walletBalance) {
+                            throw new \Exception(__('messages.wallet_balance_not_found'));
+                        }
+
+                        // 2. PHƯƠNG ÁN 2: Kiểm tra số dư ví nếu là giao dịch Chi tiêu (Expense)
+                        if ($type === 'expense' && bccomp($walletBalance->available_balance, $amount, 2) === -1) {
+                            // Ghi nhận lịch sử chạy thất bại
+                            RecurringExecution::create([
+                                'id' => (string) Str::uuid7(),
+                                'recurring_rule_id' => $ruleId,
+                                'transaction_id' => null,
+                                'executed_at' => now(),
+                                'status' => 'failed',
+                                'error_message' => __('messages.recurring_execution_insufficient_balance')
+                            ]);
+
+                            return [
+                                'status' => 'failed',
+                                'error' => __('messages.recurring_execution_insufficient_balance'),
+                                'transaction' => null
+                            ];
+                        }
+
+                        // 3. Thực hiện giao dịch
+                        $transactionId = (string) Str::uuid7();
+                        $userCurrency = DB::table('user_preferences')->where('user_id', $userId)->value('currency') ?? 'VND';
+
+                        // Cập nhật số dư ví
+                        $newBalance = 0;
+                        if ($type === 'expense') {
+                            $newBalance = bcsub($walletBalance->available_balance, $amount, 2);
+                        } else {
+                            $newBalance = bcadd($walletBalance->available_balance, $amount, 2);
+                        }
+
+                        // Tạo giao dịch định kỳ
+                        $transaction = Transaction::create([
+                            'id' => $transactionId,
+                            'user_id' => $userId,
+                            'wallet_id' => $walletId,
+                            'category_id' => $rule->category_id,
+                            'type' => $type,
+                            'status' => 'completed',
+                            'amount' => $amount,
+                            'currency_code' => $userCurrency,
+                            'exchange_rate' => 1.000000,
+                            'amount_in_user_currency' => $amount,
+                            'title' => $rule->title,
+                            'notes' => __('messages.recurring_default_notes'),
+                            'transaction_date' => $currentRunAt, // Ghi nhận đúng ngày thực tế của chu kỳ
+                            'source_type' => 'recurring',
+                            'source_id' => $ruleId
+                        ]);
+
+                        // Cập nhật số dư ví
+                        DB::table('wallet_balances')->where('wallet_id', $walletId)->update([
+                            'available_balance' => $newBalance,
+                            'last_transaction_id' => $transactionId,
+                            'updated_at' => now()
+                        ]);
+
+                        // Bắn sự kiện TransactionSaved
+                        event(new \App\Events\TransactionSaved($transaction));
+
+                        // Ghi lịch sử chạy thành công
                         RecurringExecution::create([
                             'id' => (string) Str::uuid7(),
                             'recurring_rule_id' => $ruleId,
+                            'transaction_id' => $transactionId,
+                            'executed_at' => now(),
+                            'status' => 'success',
+                            'error_message' => null
+                        ]);
+
+                        // Ghi log audit
+                        TransactionAudit::create([
+                            'transaction_id' => $transactionId,
+                            'old_data' => null,
+                            'new_data' => $transaction->toArray(),
+                            'changed_by' => $userId
+                        ]);
+
+                        return [
+                            'status' => 'success',
+                            'error' => null,
+                            'transaction' => $transaction
+                        ];
+                    });
+
+                    // Gửi thông báo
+                    if ($result['status'] === 'success') {
+                        $user->notify(new \App\Notifications\RecurringTransactionExecutedNotification($rule, $result['transaction'], 'success'));
+                        $executedCount++;
+                    } else {
+                        $user->notify(new \App\Notifications\RecurringTransactionExecutedNotification($rule, null, 'failed', $result['error']));
+                    }
+
+                    $this->advanceNextRunDate($rule);
+                } catch (\Throwable $e) {
+                    Log::error("Lỗi khi xử lý giao dịch định kỳ cho rule {$rule->id} tại chu kỳ {$currentRunAt}: " . $e->getMessage());
+
+                    try {
+                        RecurringExecution::create([
+                            'id' => (string) Str::uuid7(),
+                            'recurring_rule_id' => $rule->id,
                             'transaction_id' => null,
                             'executed_at' => now(),
                             'status' => 'failed',
-                            'error_message' => __('messages.recurring_execution_insufficient_balance')
+                            'error_message' => $e->getMessage()
                         ]);
 
-                        // Cập nhật ngày chạy tiếp theo để không bị lặp vô hạn ở ngày cũ
-                        $this->advanceNextRunDate($rule);
-                        return; // Thoát khỏi transaction của rule này
+                        $user->notify(new \App\Notifications\RecurringTransactionExecutedNotification($rule, null, 'failed', $e->getMessage()));
+                    } catch (\Throwable $ex) {
+                        Log::error("Không thể ghi log RecurringExecution thất bại: " . $ex->getMessage());
                     }
 
-                    // 3. Thực hiện giao dịch
-                    $transactionId = (string) Str::uuid7();
-                    $userCurrency = DB::table('user_preferences')->where('user_id', $userId)->value('currency') ?? 'VND';
-
-                    // Cập nhật số dư ví
-                    $newBalance = 0;
-                    if ($type === 'expense') {
-                        $newBalance = bcsub($walletBalance->available_balance, $amount, 2);
-                    } else {
-                        $newBalance = bcadd($walletBalance->available_balance, $amount, 2);
-                    }
-
-                    // Tạo giao dịch định kỳ
-                    $transaction = Transaction::create([
-                        'id' => $transactionId,
-                        'user_id' => $userId,
-                        'wallet_id' => $walletId,
-                        'category_id' => $rule->category_id,
-                        'type' => $type,
-                        'status' => 'completed',
-                        'amount' => $amount,
-                        'currency_code' => $userCurrency,
-                        'exchange_rate' => 1.000000,
-                        'amount_in_user_currency' => $amount,
-                        'title' => $rule->title,
-                        'notes' => __('messages.recurring_default_notes'),
-                        'transaction_date' => now(),
-                        'source_type' => 'recurring',
-                        'source_id' => $ruleId
-                    ]);
-
-                    // Cập nhật số dư ví
-                    DB::table('wallet_balances')->where('wallet_id', $walletId)->update([
-                        'available_balance' => $newBalance,
-                        'last_transaction_id' => $transactionId,
-                        'updated_at' => now()
-                    ]);
-
-                    // Bắn sự kiện TransactionSaved
-                    event(new \App\Events\TransactionSaved($transaction));
-
-                    // Ghi lịch sử chạy thành công
-                    RecurringExecution::create([
-                        'id' => (string) Str::uuid7(),
-                        'recurring_rule_id' => $ruleId,
-                        'transaction_id' => $transactionId,
-                        'executed_at' => now(),
-                        'status' => 'success',
-                        'error_message' => null
-                    ]);
-
-                    // Ghi log audit
-                    TransactionAudit::create([
-                        'transaction_id' => $transactionId,
-                        'old_data' => null,
-                        'new_data' => $transaction->toArray(),
-                        'changed_by' => $userId
-                    ]);
-
-                    // 4. Tính toán ngày chạy tiếp theo
                     $this->advanceNextRunDate($rule);
-                    $executedCount++;
-                });
-            } catch (\Throwable $e) {
-                Log::error("Lỗi khi xử lý giao dịch định kỳ cho rule {$rule->id}: " . $e->getMessage());
-
-                // Ghi nhận lịch sử chạy thất bại ra ngoài transaction để không bị rollback
-                try {
-                    RecurringExecution::create([
-                        'id' => (string) Str::uuid7(),
-                        'recurring_rule_id' => $rule->id,
-                        'transaction_id' => null,
-                        'executed_at' => now(),
-                        'status' => 'failed',
-                        'error_message' => $e->getMessage()
-                    ]);
-
-                    // Vẫn phải dịch ngày để tránh bị tắc nghẽn vô hạn ở mốc thời gian cũ
-                    $this->advanceNextRunDate($rule);
-                } catch (\Throwable $ex) {
-                    Log::error("Không thể ghi log RecurringExecution thất bại: " . $ex->getMessage());
                 }
             }
         }
@@ -290,6 +316,9 @@ class RecurringTransactionService
      */
     protected function advanceNextRunDate(RecurringRule $rule)
     {
+        $anchorDate = Carbon::parse($rule->start_date ?? $rule->created_at ?? $rule->next_run_at);
+        $anchorDay = $anchorDate->day;
+
         $nextRun = Carbon::parse($rule->next_run_at);
         $interval = $rule->interval_value ?? 1;
 
@@ -301,13 +330,16 @@ class RecurringTransactionService
                 $nextRun->addWeeks($interval);
                 break;
             case 'monthly':
-                $nextRun->addMonths($interval);
+                $nextRun->day(1)->addMonthsNoOverflow($interval);
+                $nextRun->day(min($anchorDay, $nextRun->daysInMonth));
                 break;
             case 'yearly':
-                $nextRun->addYears($interval);
+                $nextRun->day(1)->addYearsNoOverflow($interval);
+                $nextRun->day(min($anchorDay, $nextRun->daysInMonth));
                 break;
             default:
-                $nextRun->addMonths(1);
+                $nextRun->day(1)->addMonthsNoOverflow(1);
+                $nextRun->day(min($anchorDay, $nextRun->daysInMonth));
         }
 
         $rule->next_run_at = $nextRun;
