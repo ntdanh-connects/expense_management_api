@@ -295,8 +295,54 @@ class UserService
 
     private function verifySocialToken(string $provider, string $token, string $redirectUri = null): array
     {
-        // ... giữ nguyên code Google và Mock ...
-        
+        // === Mock Token cho Dev Mode ===
+        if (str_starts_with($token, 'mock_')) {
+            $parts = explode('_', $token, 3); // mock_google_email@test.com
+            $mockEmail = $parts[2] ?? 'dev@mock.com';
+            return [
+                'id' => 'mock_' . md5($mockEmail),
+                'email' => $mockEmail,
+                'name' => 'Dev User (' . $mockEmail . ')',
+                'avatar_url' => null,
+            ];
+        }
+
+        // === Google: Verify ID Token (JWT) ===
+        if ($provider === 'google') {
+            // Gọi Google tokeninfo API để xác minh ID Token
+            $response = Http::get("https://oauth2.googleapis.com/tokeninfo", [
+                'id_token' => $token,
+            ]);
+
+            if ($response->failed()) {
+                \Illuminate\Support\Facades\Log::error('[Social-Auth] Google tokeninfo failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                throw new \Exception(__('messages.google_token_invalid', [], 'Google ID Token không hợp lệ hoặc đã hết hạn!'));
+            }
+
+            $data = $response->json();
+
+            // Kiểm tra audience phải khớp với Client ID của app
+            $googleClientId = config('services.google.client_id');
+            if ($googleClientId && $googleClientId !== 'your-google-client-id' && $data['aud'] !== $googleClientId) {
+                \Illuminate\Support\Facades\Log::error('[Social-Auth] Google aud mismatch', [
+                    'expected' => $googleClientId,
+                    'got' => $data['aud'] ?? 'null',
+                ]);
+                throw new \Exception('Google token audience không hợp lệ!');
+            }
+
+            return [
+                'id' => $data['sub'], // Google unique user ID
+                'email' => $data['email'] ?? null,
+                'name' => $data['name'] ?? ($data['given_name'] ?? 'Google User'),
+                'avatar_url' => $data['picture'] ?? null,
+            ];
+        }
+
+        // === GitHub: Exchange code → Access Token → Get user info ===
         if ($provider === 'github') {
             $accessToken = $token;
 
