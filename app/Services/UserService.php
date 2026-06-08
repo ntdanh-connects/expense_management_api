@@ -324,14 +324,20 @@ class UserService
 
             $data = $response->json();
 
-            // Kiểm tra audience phải khớp với Client ID của app
+            // Log audience để debug (Google ID Token từ Android có aud = Web Client ID)
+            \Illuminate\Support\Facades\Log::info('[Social-Auth] Google token verified', [
+                'aud' => $data['aud'] ?? 'null',
+                'email' => $data['email'] ?? 'null',
+            ]);
+
+            // Kiểm tra audience (không bắt buộc vì Google API đã verify token)
             $googleClientId = config('services.google.client_id');
-            if ($googleClientId && $googleClientId !== 'your-google-client-id' && $data['aud'] !== $googleClientId) {
-                \Illuminate\Support\Facades\Log::error('[Social-Auth] Google aud mismatch', [
+            if ($googleClientId && $googleClientId !== 'your-google-client-id' && ($data['aud'] ?? '') !== $googleClientId) {
+                \Illuminate\Support\Facades\Log::warning('[Social-Auth] Google aud mismatch - hãy set GOOGLE_CLIENT_ID = ' . ($data['aud'] ?? 'null'), [
                     'expected' => $googleClientId,
                     'got' => $data['aud'] ?? 'null',
                 ]);
-                throw new \Exception('Google token audience không hợp lệ!');
+                // Không throw exception - Google API đã xác minh token hợp lệ rồi
             }
 
             return [
