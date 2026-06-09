@@ -3,8 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Services\TransactionService;
+use App\Jobs\ExportTransactionsJob;
+use App\Jobs\ImportTransactionsJob;
+use App\Models\ReportExport;
+use App\Models\ImportJob;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class TransactionController extends Controller
 {
@@ -180,6 +187,159 @@ class TransactionController extends Controller
 
         } catch (\Throwable $e) {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 400);
+        }
+    }
+
+    // =====================================================================
+    // Module 7: Export / Import giao dịch qua hàng đợi (Queue)
+    // =====================================================================
+
+    /**
+     * POST /api/transactions/export
+     * Tạo yêu cầu xuất CSV, đẩy job vào hàng đợi
+    /**
+     * POST /api/transactions/export
+     * Tạo bản ghi yêu cầu xuất dữ liệu ra CSV và đưa vào hàng đợi
+     */
+    public function requestExport(Request $request): JsonResponse
+    {
+        try {
+            $userId = $request->attributes->get('user_id');
+            if (!$userId) {
+                return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
+            }
+
+            $filters = $request->only(['wallet_id', 'category_id', 'start_date', 'end_date', 'type']);
+
+            // Tạo bản ghi report_exports với trạng thái pending sử dụng Eloquent
+            $export = ReportExport::create([
+                'user_id'    => $userId,
+                'status'     => 'pending',
+                'filters'    => $filters,
+                'created_at' => now(),
+            ]);
+
+            // Đẩy job vào hàng đợi
+            ExportTransactionsJob::dispatch($userId, $export->id, $filters);
+
+            return response()->json([
+                'status'    => 'success',
+                'message'   => 'Yêu cầu xuất dữ liệu đã được ghi nhận và đang được xử lý.',
+                'export_id' => $export->id,
+            ], 202);
+
+        } catch (\Throwable $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * GET /api/transactions/exports
+     * Lấy danh sách lịch sử xuất file của người dùng
+     */
+    public function listExports(Request $request): JsonResponse
+    {
+        try {
+            $userId = $request->attributes->get('user_id');
+            if (!$userId) {
+                return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
+            }
+
+            $exports = ReportExport::where('user_id', $userId)
+                ->orderBy('created_at', 'desc')
+                ->paginate(10);
+
+            return response()->json([
+                'status' => 'success',
+                'data'   => $exports->items(),
+                'pagination' => [
+                    'total'        => $exports->total(),
+                    'per_page'     => $exports->perPage(),
+                    'current_page' => $exports->currentPage(),
+                    'last_page'    => $exports->lastPage(),
+                ],
+            ], 200);
+
+        } catch (\Throwable $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * POST /api/transactions/import
+     * Nhận file CSV, lưu vào storage rồi đẩy job vào hàng đợi xử lý
+     */
+    public function requestImport(Request $request): JsonResponse
+    {
+        try {
+            $userId = $request->attributes->get('user_id');
+            if (!$userId) {
+                return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
+            }
+
+            $request->validate([
+                'file' => 'required|file|mimes:csv,txt|max:10240', // tối đa 10MB
+            ]);
+
+            // Lưu file tạm vào storage
+            $diskName  = config('filesystems.default') === 's3' ? 's3' : 'local';
+            $disk = Storage::disk($diskName);
+            $filePath  = $request->file('file')->store("imports/{$userId}", $diskName);
+            $fileUrl   = $disk->url($filePath);
+
+            // Tạo bản ghi import_jobs với trạng thái pending sử dụng Eloquent
+            $import = ImportJob::create([
+                'user_id'     => $userId,
+                'file_url'    => $fileUrl,
+                'status'      => 'pending',
+                'total_rows'  => 0,
+                'success_rows'=> 0,
+                'failed_rows' => 0,
+            ]);
+
+            // Đẩy job vào hàng đợi
+            ImportTransactionsJob::dispatch($userId, $import->id, $filePath);
+
+            return response()->json([
+                'status'    => 'success',
+                'message'   => 'File đã được tải lên và đang được xử lý trong hàng đợi.',
+                'import_id' => $import->id,
+            ], 202);
+
+        } catch (\Throwable $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 400);
+        }
+    }
+
+    /**
+     * GET /api/transactions/imports
+     * Lấy danh sách lịch sử nhập file của người dùng
+     */
+    public function listImports(Request $request): JsonResponse
+    {
+        try {
+            $userId = $request->attributes->get('user_id');
+            if (!$userId) {
+                return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
+            }
+
+            $imports = ImportJob::where('user_id', $userId)
+                ->orderBy('created_at', 'desc')
+                ->paginate(10);
+
+            return response()->json([
+                'status' => 'success',
+                'data'   => $imports->items(),
+                'pagination' => [
+                    'total'        => $imports->total(),
+                    'per_page'     => $imports->perPage(),
+                    'current_page' => $imports->currentPage(),
+                    'last_page'    => $imports->lastPage(),
+                ],
+            ], 200);
+
+        } catch (\Throwable $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     }
 }
