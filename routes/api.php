@@ -9,6 +9,9 @@ use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\RecurringRuleController;
 use App\Http\Controllers\PreferenceOptionsController;
 use App\Http\Controllers\BudgetController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\BroadcastController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::get('/verify-email/{id}/{hash}', [AuthController::class, 'verify'])
@@ -20,9 +23,19 @@ Route::post('/auth/link-social', [AuthController::class, 'linkSocial']);
 Route::post('/auth/forgot-password', [AuthController::class, 'sendResetLinkEmail']);
 // Wallet and Protected User routes
 Route::middleware(['custom.auth'])->group(function () {
+    // Broadcast auth — Pusher sẽ gọi endpoint này để xác thực kênh private
+    Route::post('/broadcasting/auth', [BroadcastController::class, 'authenticate']);
+
     // Quản lý giao dịch
     Route::get('/transactions', [TransactionController::class, 'index']);
     Route::post('/transactions', [TransactionController::class, 'store']);
+    
+    // Module 7: Export / Import giao dịch (Queue-based) - Phải đặt trước {id} để tránh bị trùng route
+    Route::post('/transactions/export', [TransactionController::class, 'requestExport']);
+    Route::get('/transactions/exports', [TransactionController::class, 'listExports']);
+    Route::post('/transactions/import', [TransactionController::class, 'requestImport']);
+    Route::get('/transactions/imports', [TransactionController::class, 'listImports']);
+
     Route::get('/transactions/{id}', [TransactionController::class, 'show']);
     Route::post('/transactions/{id}', [TransactionController::class, 'update']);
     Route::delete('/transactions/{id}', [TransactionController::class, 'destroy']);
@@ -63,6 +76,18 @@ Route::middleware(['custom.auth'])->group(function () {
     Route::post('/budgets', [BudgetController::class, 'store']);
     Route::delete('/budgets/{id}', [BudgetController::class, 'destroy']);
     Route::post('/budgets/copy', [BudgetController::class, 'copy']);
+
+
+    // Module 6: Báo cáo & Thống kê
+    Route::get('/reports/summary', [ReportController::class, 'summary']);
+    Route::get('/reports/categories', [ReportController::class, 'category']);
+    Route::get('/reports/trends', [ReportController::class, 'trends']);
+
+    // Module 8: Thông báo in-app
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'readAll']);
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'read']);
+    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
 
     //Logut and logout all
     Route::post('/logout',[AuthController::class, 'logout']);
