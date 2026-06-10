@@ -17,6 +17,11 @@ class UpdateStatistics
         $oldData = $event->oldData;
         $isDeleted = $event->isDeleted;
 
+        // Invalidate cache for reports of this user
+        $userId = $transaction->user_id;
+        $version = \Illuminate\Support\Facades\Cache::get("user_{$userId}_report_version", 1);
+        \Illuminate\Support\Facades\Cache::put("user_{$userId}_report_version", $version + 1, 86400);
+
         if ($isDeleted) {
             // Trường hợp XÓA giao dịch: trừ đi số tiền của giao dịch đó
             $this->applyDifference(

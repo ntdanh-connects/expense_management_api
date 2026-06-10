@@ -6,12 +6,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 class ReportController extends Controller
 {
     /**
      * GET /api/reports/summary
-     * Lấy tóm tắt thu chi (income, expense, net) trong khoảng thời gian
+     * Lấy tóm tắt thu chi (income, expense, net) trong khoảng thời gian, loại bỏ chuyển khoản nội bộ
      */
     public function summary(Request $request)
     {
@@ -34,48 +35,46 @@ class ReportController extends Controller
         $endDate = Carbon::parse($request->query('end_date'))->endOfDay();
         $walletId = $request->query('wallet_id');
 
-        if ($walletId) {
-            // Nếu lọc theo ví, bắt buộc phải truy vấn từ bảng transactions vì bảng statistics không lưu theo ví
-            $result = DB::table('transactions')
-                ->select(
-                    DB::raw("SUM(CASE WHEN type = 'income' THEN amount_in_user_currency ELSE 0 END) as total_income"),
-                    DB::raw("SUM(CASE WHEN type = 'expense' THEN amount_in_user_currency ELSE 0 END) as total_expense")
-                )
-                ->where('user_id', $userId)
-                ->where('wallet_id', $walletId)
-                ->whereBetween('transaction_date', [$startDate, $endDate])
-                ->whereNull('deleted_at')
-                ->first();
-        } else {
-            // Nếu không lọc theo ví, truy vấn từ daily_statistics cho nhanh
-            $result = DB::table('daily_statistics')
-                ->select(
-                    DB::raw("SUM(income) as total_income"),
-                    DB::raw("SUM(expense) as total_expense")
-                )
-                ->where('user_id', $userId)
-                ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
-                ->first();
-        }
+        $version = Cache::get("user_{$userId}_report_version", 1);
+        $cacheKey = "user_{$userId}_report_{$version}_summary_" . md5(json_encode($request->all()));
 
-        $income = (float) ($result->total_income ?? 0);
-        $expense = (float) ($result->total_expense ?? 0);
-        $net = $income - $expense;
+        $data = Cache::remember($cacheKey, 600, function() use ($userId, $startDate, $endDate, $walletId) {
+            $query = DB::table('transactions')
+                ->where('user_id', $userId)
+                ->where('source_type', '!=', 'transfer')
+                ->whereBetween('transaction_date', [$startDate, $endDate])
+                ->whereNull('deleted_at');
+
+            if ($walletId) {
+                $query->where('wallet_id', $walletId);
+            }
+
+            $result = $query->select(
+                DB::raw("SUM(CASE WHEN type = 'income' THEN amount_in_user_currency ELSE 0 END) as total_income"),
+                DB::raw("SUM(CASE WHEN type = 'expense' THEN amount_in_user_currency ELSE 0 END) as total_expense")
+            )->first();
+
+            $income = (float) ($result->total_income ?? 0);
+            $expense = (float) ($result->total_expense ?? 0);
+            $net = $income - $expense;
+
+            return [
+                'income' => $income,
+                'expense' => $expense,
+                'net' => $net
+            ];
+        });
 
         return response()->json([
             'status' => 'success',
             'message' => 'Lấy tóm tắt báo cáo thành công',
-            'data' => [
-                'income' => $income,
-                'expense' => $expense,
-                'net' => $net
-            ]
+            'data' => $data
         ]);
     }
 
     /**
-     * GET /api/reports/category
-     * Báo cáo cơ cấu chi tiêu/thu nhập theo danh mục
+     * GET /api/reports/categories
+     * Báo cáo cơ cấu chi tiêu/thu nhập theo danh mục, loại bỏ chuyển khoản nội bộ
      */
     public function category(Request $request)
     {
@@ -96,120 +95,127 @@ class ReportController extends Controller
         }
 
         $userId = $request->attributes->get('user_id');
-        $type = $request->query('type') ?? 'expense'; // Mặc định là chi tiêu
+        $type = $request->query('type') ?? 'expense';
 
-        if ($request->has('start_date') && $request->has('end_date')) {
-            $startDate = Carbon::parse($request->query('start_date'))->startOfDay();
-            $endDate = Carbon::parse($request->query('end_date'))->endOfDay();
+        $version = Cache::get("user_{$userId}_report_version", 1);
+        $cacheKey = "user_{$userId}_report_{$version}_category_" . md5(json_encode($request->all()));
 
-            // Lấy tổng số tiền của loại giao dịch đó trong khoảng thời gian để tính tỷ lệ %
-            $totalAmountResult = DB::table('transactions')
-                ->join('categories', 'transactions.category_id', '=', 'categories.id')
-                ->where('transactions.user_id', $userId)
-                ->whereNull('transactions.deleted_at')
-                ->whereNull('categories.deleted_at')
-                ->where('categories.type', $type)
-                ->whereBetween('transactions.transaction_date', [$startDate, $endDate])
-                ->select(DB::raw("SUM(transactions.amount_in_user_currency) as total"))
-                ->first();
+        $response = Cache::remember($cacheKey, 600, function() use ($request, $userId, $type) {
+            if ($request->has('start_date') && $request->has('end_date')) {
+                $startDate = Carbon::parse($request->query('start_date'))->startOfDay();
+                $endDate = Carbon::parse($request->query('end_date'))->endOfDay();
 
-            $totalAmount = (float) ($totalAmountResult->total ?? 0);
+                // Lấy tổng số tiền của loại giao dịch đó trong khoảng thời gian để tính tỷ lệ %
+                $totalAmountResult = DB::table('transactions')
+                    ->join('categories', 'transactions.category_id', '=', 'categories.id')
+                    ->where('transactions.user_id', $userId)
+                    ->whereNull('transactions.deleted_at')
+                    ->whereNull('categories.deleted_at')
+                    ->where('categories.type', $type)
+                    ->where('transactions.source_type', '!=', 'transfer')
+                    ->whereBetween('transactions.transaction_date', [$startDate, $endDate])
+                    ->select(DB::raw("SUM(transactions.amount_in_user_currency) as total"))
+                    ->first();
 
-            // Lấy chi tiết thống kê từng hạng mục từ bảng transactions
-            $categoriesStats = DB::table('transactions')
-                ->join('categories', 'transactions.category_id', '=', 'categories.id')
-                ->leftJoin('categories as parent', 'categories.parent_id', '=', 'parent.id')
-                ->where('transactions.user_id', $userId)
-                ->whereNull('transactions.deleted_at')
-                ->whereNull('categories.deleted_at')
-                ->where('categories.type', $type)
-                ->whereBetween('transactions.transaction_date', [$startDate, $endDate])
-                ->select(
-                    'categories.id as category_id',
-                    'categories.name as category_name',
-                    'categories.color as category_color',
-                    'categories.icon as category_icon',
-                    'categories.parent_id',
-                    'parent.name as parent_name',
-                    DB::raw("SUM(transactions.amount_in_user_currency) as amount")
-                )
-                ->groupBy(
-                    'categories.id',
-                    'categories.name',
-                    'categories.color',
-                    'categories.icon',
-                    'categories.parent_id',
-                    'parent.name'
-                )
-                ->orderBy('amount', 'desc')
-                ->get();
-        } else {
-            $month = (int) $request->query('month');
-            $year = (int) $request->query('year');
+                $totalAmount = (float) ($totalAmountResult->total ?? 0);
 
-            // Lấy tổng số tiền của loại giao dịch đó trong tháng/năm để tính tỷ lệ %
-            $totalAmountResult = DB::table('category_statistics')
-                ->join('categories', 'category_statistics.category_id', '=', 'categories.id')
-                ->where('category_statistics.user_id', $userId)
-                ->where('category_statistics.month', $month)
-                ->where('category_statistics.year', $year)
-                ->where('categories.type', $type)
-                ->whereNull('categories.deleted_at')
-                ->select(DB::raw("SUM(category_statistics.total_amount) as total"))
-                ->first();
+                // Lấy chi tiết thống kê từng hạng mục từ bảng transactions
+                $categoriesStats = DB::table('transactions')
+                    ->join('categories', 'transactions.category_id', '=', 'categories.id')
+                    ->leftJoin('categories as parent', 'categories.parent_id', '=', 'parent.id')
+                    ->where('transactions.user_id', $userId)
+                    ->whereNull('transactions.deleted_at')
+                    ->whereNull('categories.deleted_at')
+                    ->where('categories.type', $type)
+                    ->where('transactions.source_type', '!=', 'transfer')
+                    ->whereBetween('transactions.transaction_date', [$startDate, $endDate])
+                    ->select(
+                        'categories.id as category_id',
+                        'categories.name as category_name',
+                        'categories.color as category_color',
+                        'categories.icon as category_icon',
+                        'categories.parent_id',
+                        'parent.name as parent_name',
+                        DB::raw("SUM(transactions.amount_in_user_currency) as amount")
+                    )
+                    ->groupBy(
+                        'categories.id',
+                        'categories.name',
+                        'categories.color',
+                        'categories.icon',
+                        'categories.parent_id',
+                        'parent.name'
+                    )
+                    ->orderBy('amount', 'desc')
+                    ->get();
+            } else {
+                $month = (int) $request->query('month');
+                $year = (int) $request->query('year');
 
-            $totalAmount = (float) ($totalAmountResult->total ?? 0);
+                $totalAmountResult = DB::table('category_statistics')
+                    ->join('categories', 'category_statistics.category_id', '=', 'categories.id')
+                    ->where('category_statistics.user_id', $userId)
+                    ->where('category_statistics.month', $month)
+                    ->where('category_statistics.year', $year)
+                    ->where('categories.type', $type)
+                    ->whereNull('categories.deleted_at')
+                    ->select(DB::raw("SUM(category_statistics.total_amount) as total"))
+                    ->first();
 
-            // Lấy chi tiết thống kê từng hạng mục
-            $categoriesStats = DB::table('category_statistics')
-                ->join('categories', 'category_statistics.category_id', '=', 'categories.id')
-                ->leftJoin('categories as parent', 'categories.parent_id', '=', 'parent.id')
-                ->where('category_statistics.user_id', $userId)
-                ->where('category_statistics.month', $month)
-                ->where('category_statistics.year', $year)
-                ->where('categories.type', $type)
-                ->whereNull('categories.deleted_at')
-                ->select(
-                    'categories.id as category_id',
-                    'categories.name as category_name',
-                    'categories.color as category_color',
-                    'categories.icon as category_icon',
-                    'categories.parent_id',
-                    'parent.name as parent_name',
-                    'category_statistics.total_amount as amount'
-                )
-                ->orderBy('amount', 'desc')
-                ->get();
-        }
+                $totalAmount = (float) ($totalAmountResult->total ?? 0);
 
-        $data = $categoriesStats->map(function ($item) use ($totalAmount) {
-            $amount = (float) $item->amount;
-            $percentage = $totalAmount > 0 ? round(($amount / $totalAmount) * 100, 2) : 0;
+                $categoriesStats = DB::table('category_statistics')
+                    ->join('categories', 'category_statistics.category_id', '=', 'categories.id')
+                    ->leftJoin('categories as parent', 'categories.parent_id', '=', 'parent.id')
+                    ->where('category_statistics.user_id', $userId)
+                    ->where('category_statistics.month', $month)
+                    ->where('category_statistics.year', $year)
+                    ->where('categories.type', $type)
+                    ->whereNull('categories.deleted_at')
+                    ->select(
+                        'categories.id as category_id',
+                        'categories.name as category_name',
+                        'categories.color as category_color',
+                        'categories.icon as category_icon',
+                        'categories.parent_id',
+                        'parent.name as parent_name',
+                        'category_statistics.total_amount as amount'
+                    )
+                    ->orderBy('amount', 'desc')
+                    ->get();
+            }
+
+            $data = $categoriesStats->map(function ($item) use ($totalAmount) {
+                $amount = (float) $item->amount;
+                $percentage = $totalAmount > 0 ? round(($amount / $totalAmount) * 100, 2) : 0;
+                return [
+                    'category_id' => $item->category_id,
+                    'category_name' => $item->category_name,
+                    'category_color' => $item->category_color,
+                    'category_icon' => $item->category_icon,
+                    'parent_id' => $item->parent_id,
+                    'parent_name' => $item->parent_name,
+                    'amount' => $amount,
+                    'percentage' => $percentage
+                ];
+            });
+
             return [
-                'category_id' => $item->category_id,
-                'category_name' => $item->category_name,
-                'category_color' => $item->category_color,
-                'category_icon' => $item->category_icon,
-                'parent_id' => $item->parent_id,
-                'parent_name' => $item->parent_name,
-                'amount' => $amount,
-                'percentage' => $percentage
+                'total_amount' => $totalAmount,
+                'categories' => $data
             ];
         });
 
         return response()->json([
             'status' => 'success',
             'message' => 'Lấy phân bổ chi tiêu thành công',
-            'data' => [
-                'total_amount' => $totalAmount,
-                'categories' => $data
-            ]
+            'data' => $response
         ]);
     }
 
     /**
      * GET /api/reports/trends
-     * Xu hướng thu chi (income và expense theo thời gian)
+     * Xu hướng thu chi (income và expense theo thời gian), loại bỏ chuyển khoản nội bộ
      */
     public function trends(Request $request)
     {
@@ -232,47 +238,52 @@ class ReportController extends Controller
         $endDate = Carbon::parse($request->query('end_date'));
         $groupBy = $request->query('group_by') ?? 'day';
 
-        $data = [];
+        $version = Cache::get("user_{$userId}_report_version", 1);
+        $cacheKey = "user_{$userId}_report_{$version}_trends_" . md5(json_encode($request->all()));
 
-        if ($groupBy === 'day') {
-            $stats = DB::table('daily_statistics')
+        $data = Cache::remember($cacheKey, 600, function() use ($userId, $startDate, $endDate, $groupBy) {
+            $transactions = DB::table('transactions')
                 ->where('user_id', $userId)
-                ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
-                ->orderBy('date', 'asc')
+                ->where('source_type', '!=', 'transfer')
+                ->whereBetween('transaction_date', [$startDate->startOfDay(), $endDate->endOfDay()])
+                ->whereNull('deleted_at')
+                ->orderBy('transaction_date', 'asc')
                 ->get();
 
-            $data = $stats->map(function ($item) {
-                return [
-                    'label' => Carbon::parse($item->date)->format('d/m'),
-                    'date' => $item->date,
-                    'income' => (float) $item->income,
-                    'expense' => (float) $item->expense
-                ];
-            });
-        } else {
-            // Group theo tháng
-            $stats = DB::table('monthly_statistics')
-                ->where('user_id', $userId)
-                ->where(function($query) use ($startDate, $endDate) {
-                    // Lọc theo khoảng năm/tháng
-                    $startVal = $startDate->year * 12 + $startDate->month;
-                    $endVal = $endDate->year * 12 + $endDate->month;
-                    $query->whereRaw("year * 12 + month BETWEEN ? AND ?", [$startVal, $endVal]);
-                })
-                ->orderBy('year', 'asc')
-                ->orderBy('month', 'asc')
-                ->get();
+            if ($groupBy === 'day') {
+                $grouped = $transactions->groupBy(function($item) {
+                    return Carbon::parse($item->transaction_date)->toDateString();
+                });
 
-            $data = $stats->map(function ($item) {
-                return [
-                    'label' => sprintf('%02d/%d', $item->month, $item->year),
-                    'month' => (int) $item->month,
-                    'year' => (int) $item->year,
-                    'income' => (float) $item->income,
-                    'expense' => (float) $item->expense
-                ];
-            });
-        }
+                return $grouped->map(function($items, $dateStr) {
+                    $income = $items->where('type', 'income')->sum('amount_in_user_currency');
+                    $expense = $items->where('type', 'expense')->sum('amount_in_user_currency');
+                    return [
+                        'label' => Carbon::parse($dateStr)->format('d/m'),
+                        'date' => $dateStr,
+                        'income' => (float) $income,
+                        'expense' => (float) $expense
+                    ];
+                })->values()->toArray();
+            } else {
+                $grouped = $transactions->groupBy(function($item) {
+                    return Carbon::parse($item->transaction_date)->format('Y-m');
+                });
+
+                return $grouped->map(function($items, $monthStr) {
+                    $carbon = Carbon::parse($monthStr . '-01');
+                    $income = $items->where('type', 'income')->sum('amount_in_user_currency');
+                    $expense = $items->where('type', 'expense')->sum('amount_in_user_currency');
+                    return [
+                        'label' => $carbon->format('m/Y'),
+                        'month' => $carbon->month,
+                        'year' => $carbon->year,
+                        'income' => (float) $income,
+                        'expense' => (float) $expense
+                    ];
+                })->values()->toArray();
+            }
+        });
 
         return response()->json([
             'status' => 'success',
