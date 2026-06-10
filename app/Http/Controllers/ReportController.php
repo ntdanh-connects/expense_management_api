@@ -41,7 +41,10 @@ class ReportController extends Controller
         $data = Cache::remember($cacheKey, 600, function() use ($userId, $startDate, $endDate, $walletId) {
             $query = DB::table('transactions')
                 ->where('user_id', $userId)
-                ->where('source_type', '!=', 'transfer')
+                ->where(function ($q) {
+                    $q->where('source_type', '!=', 'transfer')
+                      ->orWhereNull('source_type');
+                })
                 ->whereBetween('transaction_date', [$startDate, $endDate])
                 ->whereNull('deleted_at');
 
@@ -112,7 +115,10 @@ class ReportController extends Controller
                     ->whereNull('transactions.deleted_at')
                     ->whereNull('categories.deleted_at')
                     ->where('categories.type', $type)
-                    ->where('transactions.source_type', '!=', 'transfer')
+                    ->where(function ($q) {
+                        $q->where('transactions.source_type', '!=', 'transfer')
+                          ->orWhereNull('transactions.source_type');
+                    })
                     ->whereBetween('transactions.transaction_date', [$startDate, $endDate])
                     ->select(DB::raw("SUM(transactions.amount_in_user_currency) as total"))
                     ->first();
@@ -127,7 +133,10 @@ class ReportController extends Controller
                     ->whereNull('transactions.deleted_at')
                     ->whereNull('categories.deleted_at')
                     ->where('categories.type', $type)
-                    ->where('transactions.source_type', '!=', 'transfer')
+                    ->where(function ($q) {
+                        $q->where('transactions.source_type', '!=', 'transfer')
+                          ->orWhereNull('transactions.source_type');
+                    })
                     ->whereBetween('transactions.transaction_date', [$startDate, $endDate])
                     ->select(
                         'categories.id as category_id',
@@ -244,7 +253,10 @@ class ReportController extends Controller
         $data = Cache::remember($cacheKey, 600, function() use ($userId, $startDate, $endDate, $groupBy) {
             $transactions = DB::table('transactions')
                 ->where('user_id', $userId)
-                ->where('source_type', '!=', 'transfer')
+                ->where(function ($q) {
+                    $q->where('source_type', '!=', 'transfer')
+                      ->orWhereNull('source_type');
+                })
                 ->whereBetween('transaction_date', [$startDate->startOfDay(), $endDate->endOfDay()])
                 ->whereNull('deleted_at')
                 ->orderBy('transaction_date', 'asc')

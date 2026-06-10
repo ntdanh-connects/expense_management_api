@@ -29,6 +29,10 @@ class User extends Authenticatable {
         return $this->hasOne(UserPreference::class, 'user_id', 'user_id');
     }
 
+    public function notificationPreference(){
+        return $this->hasOne(NotificationPreference::class, 'user_id', 'user_id');
+    }
+
     public function sessions() {
     return $this->hasMany(UserSession::class, 'user_id', 'user_id');
 }

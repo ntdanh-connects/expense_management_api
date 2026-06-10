@@ -85,6 +85,8 @@ Route::middleware(['custom.auth'])->group(function () {
 
     // Module 8: Thông báo in-app
     Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/preferences', [NotificationController::class, 'getPreferences']);
+    Route::post('/notifications/preferences', [NotificationController::class, 'updatePreferences']);
     Route::post('/notifications/read-all', [NotificationController::class, 'readAll']);
     Route::post('/notifications/{id}/read', [NotificationController::class, 'read']);
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);

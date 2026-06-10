@@ -117,4 +117,64 @@ class NotificationController extends Controller
             'message' => 'Đã xóa thông báo.'
         ]);
     }
+
+    /**
+     * GET /api/notifications/preferences
+     * Lấy cài đặt cấu hình nhận thông báo (email, in-app/push, weekly summary, daily reminder)
+     */
+    public function getPreferences(Request $request)
+    {
+        $userId = $request->attributes->get('user_id');
+
+        // Tìm hoặc tạo mới cấu hình mặc định (tất cả đều bật = true)
+        $preferences = \App\Models\NotificationPreference::firstOrCreate(
+            ['user_id' => $userId],
+            [
+                'email_enabled' => true,
+                'push_enabled' => true,
+                'weekly_summary_enabled' => true,
+                'daily_reminder_enabled' => true
+            ]
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $preferences
+        ]);
+    }
+
+    /**
+     * POST /api/notifications/preferences
+     * Cập nhật cấu hình nhận thông báo
+     */
+    public function updatePreferences(Request $request)
+    {
+        $userId = $request->attributes->get('user_id');
+
+        $validator = Validator::make($request->all(), [
+            'email_enabled' => 'sometimes|boolean',
+            'push_enabled' => 'sometimes|boolean',
+            'weekly_summary_enabled' => 'sometimes|boolean',
+            'daily_reminder_enabled' => 'sometimes|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Dữ liệu không hợp lệ.',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $preferences = \App\Models\NotificationPreference::updateOrCreate(
+            ['user_id' => $userId],
+            $validator->validated()
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Cập nhật cài đặt thông báo thành công.',
+            'data' => $preferences
+        ]);
+    }
 }
