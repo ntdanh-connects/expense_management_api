@@ -211,7 +211,7 @@ class ReportController extends Controller
 
             return [
                 'total_amount' => $totalAmount,
-                'categories' => $data
+                'categories' => $data->values()->all()
             ];
         });
 
