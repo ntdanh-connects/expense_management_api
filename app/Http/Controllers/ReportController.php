@@ -282,18 +282,29 @@ class ReportController extends Controller
                     return Carbon::parse($item->transaction_date)->format('Y-m');
                 });
 
-                return $grouped->map(function($items, $monthStr) {
-                    $carbon = Carbon::parse($monthStr . '-01');
+                $result = [];
+                $current = $startDate->copy()->startOfMonth();
+                $end = $endDate->copy()->startOfMonth();
+
+                while ($current->lte($end)) {
+                    $monthStr = $current->format('Y-m');
+                    $items = $grouped->get($monthStr, collect([]));
+
                     $income = $items->where('type', 'income')->sum('amount_in_user_currency');
                     $expense = $items->where('type', 'expense')->sum('amount_in_user_currency');
-                    return [
-                        'label' => $carbon->format('m/Y'),
-                        'month' => $carbon->month,
-                        'year' => $carbon->year,
+
+                    $result[] = [
+                        'label' => $current->format('m/Y'),
+                        'month' => $current->month,
+                        'year' => $current->year,
                         'income' => (float) $income,
                         'expense' => (float) $expense
                     ];
-                })->values()->toArray();
+
+                    $current->addMonth();
+                }
+
+                return $result;
             }
         });
 
