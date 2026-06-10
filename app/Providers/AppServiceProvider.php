@@ -21,13 +21,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        \Illuminate\Support\Facades\Event::listen(
-            \App\Events\TransactionSaved::class,
-            \App\Listeners\UpdateBudgetUsage::class
-        );
-        \Illuminate\Support\Facades\Event::listen(
-            \App\Events\TransactionSaved::class,
-            \App\Listeners\UpdateStatistics::class
-        );
+        // Listener UpdateBudgetUsage và UpdateStatistics được Laravel tự phát hiện
+        // thông qua type-hint TransactionSaved trong method handle().
+        // KHÔNG đăng ký thủ công ở đây để tránh bị gọi 2 lần → nhân đôi số liệu thống kê.
     }
 }
