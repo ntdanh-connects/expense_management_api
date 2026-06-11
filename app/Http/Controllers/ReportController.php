@@ -31,7 +31,7 @@ class ReportController extends Controller
         }
 
         $userId = $request->attributes->get('user_id');
-        $userTimezone = DB::table('users')->where('id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
+        $userTimezone = DB::table('user_preferences')->where('user_id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
         $startDate = Carbon::parse($request->query('start_date'), $userTimezone)->startOfDay()->setTimezone('UTC');
         $endDate = Carbon::parse($request->query('end_date'), $userTimezone)->endOfDay()->setTimezone('UTC');
         $walletId = $request->query('wallet_id');
@@ -106,7 +106,7 @@ class ReportController extends Controller
 
         $response = Cache::remember($cacheKey, 600, function() use ($request, $userId, $type) {
             if ($request->has('start_date') && $request->has('end_date')) {
-                $userTimezone = DB::table('users')->where('id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
+                $userTimezone = DB::table('user_preferences')->where('user_id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
                 $startDate = Carbon::parse($request->query('start_date'), $userTimezone)->startOfDay()->setTimezone('UTC');
                 $endDate = Carbon::parse($request->query('end_date'), $userTimezone)->endOfDay()->setTimezone('UTC');
 
@@ -245,7 +245,7 @@ class ReportController extends Controller
         }
 
         $userId = $request->attributes->get('user_id');
-        $userTimezone = DB::table('users')->where('id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
+        $userTimezone = DB::table('user_preferences')->where('user_id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
         $startDate = Carbon::parse($request->query('start_date'), $userTimezone);
         $endDate = Carbon::parse($request->query('end_date'), $userTimezone);
         $groupBy = $request->query('group_by') ?? 'day';
