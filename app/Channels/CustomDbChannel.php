@@ -46,13 +46,17 @@ class CustomDbChannel
         ]);
 
         // Phát sóng realtime qua Pusher — Frontend sẽ nhận được ngay lập tức
-        event(new NewNotification($userId, [
-            'id' => $notificationId,
-            'title' => $title,
-            'content' => $content,
-            'metadata' => $data,
-            'read_at' => null,
-            'created_at' => $now->toISOString(),
-        ]));
+        try {
+            event(new NewNotification($userId, [
+                'id' => $notificationId,
+                'title' => $title,
+                'content' => $content,
+                'metadata' => $data,
+                'read_at' => null,
+                'created_at' => $now->toISOString(),
+            ]));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("Lỗi phát sóng realtime qua Pusher: " . $e->getMessage());
+        }
     }
 }

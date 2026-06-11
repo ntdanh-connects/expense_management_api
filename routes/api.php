@@ -12,6 +12,7 @@ use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\BroadcastController;
+use App\Http\Controllers\CronController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::get('/verify-email/{id}/{hash}', [AuthController::class, 'verify'])
@@ -21,6 +22,10 @@ Route::post('/refresh-token', [AuthController::class, 'refreshToken']);
 Route::post('/auth/social', [AuthController::class, 'socialLogin']);
 Route::post('/auth/link-social', [AuthController::class, 'linkSocial']);
 Route::post('/auth/forgot-password', [AuthController::class, 'sendResetLinkEmail']);
+
+// Web Trigger Cron (UptimeRobot ping)
+Route::get('/cron-trigger', [CronController::class, 'trigger']);
+
 // Wallet and Protected User routes
 Route::middleware(['custom.auth'])->group(function () {
     // Broadcast auth — Pusher sẽ gọi endpoint này để xác thực kênh private
