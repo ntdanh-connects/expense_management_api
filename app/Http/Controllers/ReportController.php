@@ -31,8 +31,9 @@ class ReportController extends Controller
         }
 
         $userId = $request->attributes->get('user_id');
-        $startDate = Carbon::parse($request->query('start_date'))->startOfDay();
-        $endDate = Carbon::parse($request->query('end_date'))->endOfDay();
+        $userTimezone = DB::table('users')->where('id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
+        $startDate = Carbon::parse($request->query('start_date'), $userTimezone)->startOfDay()->setTimezone('UTC');
+        $endDate = Carbon::parse($request->query('end_date'), $userTimezone)->endOfDay()->setTimezone('UTC');
         $walletId = $request->query('wallet_id');
 
         $version = Cache::get("user_{$userId}_report_version", 1);
@@ -105,8 +106,9 @@ class ReportController extends Controller
 
         $response = Cache::remember($cacheKey, 600, function() use ($request, $userId, $type) {
             if ($request->has('start_date') && $request->has('end_date')) {
-                $startDate = Carbon::parse($request->query('start_date'))->startOfDay();
-                $endDate = Carbon::parse($request->query('end_date'))->endOfDay();
+                $userTimezone = DB::table('users')->where('id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
+                $startDate = Carbon::parse($request->query('start_date'), $userTimezone)->startOfDay()->setTimezone('UTC');
+                $endDate = Carbon::parse($request->query('end_date'), $userTimezone)->endOfDay()->setTimezone('UTC');
 
                 // Lấy tổng số tiền của loại giao dịch đó trong khoảng thời gian để tính tỷ lệ %
                 $totalAmountResult = DB::table('transactions')
@@ -243,43 +245,47 @@ class ReportController extends Controller
         }
 
         $userId = $request->attributes->get('user_id');
-        $startDate = Carbon::parse($request->query('start_date'));
-        $endDate = Carbon::parse($request->query('end_date'));
+        $userTimezone = DB::table('users')->where('id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
+        $startDate = Carbon::parse($request->query('start_date'), $userTimezone);
+        $endDate = Carbon::parse($request->query('end_date'), $userTimezone);
         $groupBy = $request->query('group_by') ?? 'day';
 
         $version = Cache::get("user_{$userId}_report_version", 1);
         $cacheKey = "user_{$userId}_report_{$version}_trends_" . md5(json_encode($request->all()));
 
-        $data = Cache::remember($cacheKey, 600, function() use ($userId, $startDate, $endDate, $groupBy) {
+        $data = Cache::remember($cacheKey, 600, function() use ($userId, $startDate, $endDate, $groupBy, $userTimezone) {
+            $dbStartDate = $startDate->copy()->startOfDay()->setTimezone('UTC');
+            $dbEndDate = $endDate->copy()->endOfDay()->setTimezone('UTC');
+
             $transactions = DB::table('transactions')
                 ->where('user_id', $userId)
                 ->where(function ($q) {
                     $q->where('source_type', '!=', 'transfer')
                       ->orWhereNull('source_type');
                 })
-                ->whereBetween('transaction_date', [$startDate->startOfDay(), $endDate->endOfDay()])
+                ->whereBetween('transaction_date', [$dbStartDate, $dbEndDate])
                 ->whereNull('deleted_at')
                 ->orderBy('transaction_date', 'asc')
                 ->get();
 
             if ($groupBy === 'day') {
-                $grouped = $transactions->groupBy(function($item) {
-                    return Carbon::parse($item->transaction_date)->toDateString();
+                $grouped = $transactions->groupBy(function($item) use ($userTimezone) {
+                    return Carbon::parse($item->transaction_date)->setTimezone($userTimezone)->toDateString();
                 });
 
-                return $grouped->map(function($items, $dateStr) {
+                return $grouped->map(function($items, $dateStr) use ($userTimezone) {
                     $income = $items->where('type', 'income')->sum('amount_in_user_currency');
                     $expense = $items->where('type', 'expense')->sum('amount_in_user_currency');
                     return [
-                        'label' => Carbon::parse($dateStr)->format('d/m'),
+                        'label' => Carbon::parse($dateStr, $userTimezone)->format('d/m'),
                         'date' => $dateStr,
                         'income' => (float) $income,
                         'expense' => (float) $expense
                     ];
                 })->values()->toArray();
             } else {
-                $grouped = $transactions->groupBy(function($item) {
-                    return Carbon::parse($item->transaction_date)->format('Y-m');
+                $grouped = $transactions->groupBy(function($item) use ($userTimezone) {
+                    return Carbon::parse($item->transaction_date)->setTimezone($userTimezone)->format('Y-m');
                 });
 
                 $result = [];
