@@ -27,8 +27,8 @@ class BudgetWarningNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        // Gửi cả email và lưu vào database cho in-app notifications (Module 8)
-        return ['mail', \App\Channels\CustomDbChannel::class];
+        // Gửi cả email, lưu vào database cho in-app notifications (Module 8) và bắn FCM push notification
+        return ['mail', \App\Channels\CustomDbChannel::class, \App\Channels\FcmChannel::class];
     }
 
     /**
@@ -83,4 +83,23 @@ class BudgetWarningNotification extends Notification
                 : "Hạn mức ngân sách cho {$categoryName} đã đạt {$this->thresholdPercent}%."
         ];
     }
+
+    /**
+     * Get the FCM representation of the notification.
+     */
+    public function toFcm(object $notifiable): array
+    {
+        $categoryName = $this->budget->category ? $this->budget->category->name : 'Tổng chi tiêu';
+        $title = $this->thresholdPercent === 100 ? '⚠️ Vượt hạn mức ngân sách' : '⚡ Cảnh báo ngân sách';
+        $body = $this->thresholdPercent === 100 
+            ? "Ngân sách cho {$categoryName} đã vượt quá 100% hạn mức!"
+            : "Hạn mức ngân sách cho {$categoryName} đã đạt {$this->thresholdPercent}%.";
+
+        return [
+            'title' => $title,
+            'body' => $body,
+            'data' => $this->toArray($notifiable)
+        ];
+    }
 }
+

@@ -31,7 +31,7 @@ class RecurringTransactionExecutedNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        return ['mail', CustomDbChannel::class];
+        return ['mail', CustomDbChannel::class, \App\Channels\FcmChannel::class];
     }
 
     /**
@@ -94,4 +94,22 @@ class RecurringTransactionExecutedNotification extends Notification
             ];
         }
     }
+
+    /**
+     * Get the FCM representation of the notification.
+     */
+    public function toFcm(object $notifiable): array
+    {
+        $title = $this->status === 'success' ? '✅ Giao dịch định kỳ thành công' : '⚠️ Lỗi giao dịch định kỳ';
+        $body = $this->status === 'success'
+            ? "Giao dịch định kỳ \"{$this->rule->title}\" đã được tự động thực hiện thành công."
+            : "Giao dịch định kỳ \"{$this->rule->title}\" thực thi thất bại: " . ($this->errorMessage ?? 'Lỗi không xác định.');
+
+        return [
+            'title' => $title,
+            'body' => $body,
+            'data' => $this->toArray($notifiable)
+        ];
+    }
 }
+

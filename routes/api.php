@@ -13,6 +13,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\BroadcastController;
 use App\Http\Controllers\CronController;
+use App\Http\Controllers\DeviceTokenController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::get('/verify-email/{id}/{hash}', [AuthController::class, 'verify'])
@@ -95,6 +96,10 @@ Route::middleware(['custom.auth'])->group(function () {
     Route::post('/notifications/read-all', [NotificationController::class, 'readAll']);
     Route::post('/notifications/{id}/read', [NotificationController::class, 'read']);
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
+
+    // Cấu hình FCM Device Tokens
+    Route::post('/user/device-token', [DeviceTokenController::class, 'register']);
+    Route::delete('/user/device-token', [DeviceTokenController::class, 'unregister']);
 
     //Logut and logout all
     Route::post('/logout',[AuthController::class, 'logout']);
