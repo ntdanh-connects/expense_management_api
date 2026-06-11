@@ -191,6 +191,39 @@ class RecurringTransactionService
                             throw new \Exception(__('messages.wallet_balance_not_found'));
                         }
 
+                        // 1.5. Kiểm tra xem người dùng đã tự nhập thủ công một giao dịch giống hệt trong ngày này chưa
+                        $targetDate = Carbon::parse($currentRunAt);
+                        $startOfDay = $targetDate->copy()->startOfDay();
+                        $endOfDay = $targetDate->copy()->endOfDay();
+
+                        $alreadyLogged = DB::table('transactions')
+                            ->where('user_id', $userId)
+                            ->where('wallet_id', $walletId)
+                            ->where('type', $type)
+                            ->where('amount', $amount)
+                            ->where('title', $rule->title)
+                            ->whereBetween('transaction_date', [$startOfDay, $endOfDay])
+                            ->whereNull('deleted_at')
+                            ->exists();
+
+                        if ($alreadyLogged) {
+                            // Ghi nhận lịch sử chạy là skipped
+                            RecurringExecution::create([
+                                'id' => (string) Str::uuid7(),
+                                'recurring_rule_id' => $ruleId,
+                                'transaction_id' => null,
+                                'executed_at' => now(),
+                                'status' => 'skipped',
+                                'error_message' => 'Người dùng đã tự ghi nhận thủ công trong ngày này'
+                            ]);
+
+                            return [
+                                'status' => 'skipped',
+                                'error' => null,
+                                'transaction' => null
+                            ];
+                        }
+
                         // 2. PHƯƠNG ÁN 2: Kiểm tra số dư ví nếu là giao dịch Chi tiêu (Expense)
                         if ($type === 'expense' && bccomp($walletBalance->available_balance, $amount, 2) === -1) {
                             // Ghi nhận lịch sử chạy thất bại
@@ -280,6 +313,8 @@ class RecurringTransactionService
                     if ($result['status'] === 'success') {
                         $user->notify(new \App\Notifications\RecurringTransactionExecutedNotification($rule, $result['transaction'], 'success'));
                         $executedCount++;
+                    } elseif ($result['status'] === 'skipped') {
+                        // Bỏ qua không gửi thông báo vì người dùng đã tự ghi nhận thủ công
                     } else {
                         $user->notify(new \App\Notifications\RecurringTransactionExecutedNotification($rule, null, 'failed', $result['error']));
                     }

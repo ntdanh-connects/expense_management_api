@@ -89,6 +89,27 @@ class TransactionService
             $userTimezone = DB::table('user_preferences')->where('user_id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
             $timezone = $data['timezone'] ?? $userTimezone;
 
+            // 2.5. Kiểm tra xem giao dịch này đã được ghi nhận tự động hôm nay theo lịch định kỳ chưa
+            // (Chỉ áp dụng cho các giao dịch tạo thủ công từ phía người dùng)
+            $txDate = isset($data['transaction_date']) ? \Illuminate\Support\Carbon::parse($data['transaction_date']) : \Illuminate\Support\Carbon::now($timezone);
+            $startOfDay = $txDate->copy()->startOfDay();
+            $endOfDay = $txDate->copy()->endOfDay();
+
+            $automaticallyLogged = DB::table('transactions')
+                ->where('user_id', $userId)
+                ->where('wallet_id', $walletId)
+                ->where('type', $type)
+                ->where('amount', $amount)
+                ->where('title', $data['title'])
+                ->where('source_type', 'recurring')
+                ->whereBetween('transaction_date', [$startOfDay, $endOfDay])
+                ->whereNull('deleted_at')
+                ->exists();
+
+            if ($automaticallyLogged) {
+                throw new \Exception(__('messages.transaction_already_logged_automatically'));
+            }
+
             $transactionId = (string) Str::uuid7();
 
             // Phân giải tỷ giá hối đoái

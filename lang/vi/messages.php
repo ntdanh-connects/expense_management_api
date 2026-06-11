@@ -102,5 +102,6 @@ return [
     'pause_recurring_rule_success' => 'Tạm dừng quy tắc thành công.',
     'recurring_execution_insufficient_balance' => 'Không đủ số dư ví để thực thi giao dịch định kỳ (Phương án 2).',
     'recurring_default_notes' => 'Giao dịch định kỳ tự động tạo từ quy tắc.',
+    'transaction_already_logged_automatically' => 'Giao dịch này đã được tự động ghi nhận hôm nay theo lịch định kỳ.',
 ];
 

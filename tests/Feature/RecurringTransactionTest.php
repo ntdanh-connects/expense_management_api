@@ -301,4 +301,108 @@ class RecurringTransactionTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    /**
+     * Test 5: Nếu người dùng đã tự nhập giao dịch thủ công hôm nay, scheduler quét định kỳ sẽ BỎ QUA không ghi nhận trùng lặp
+     */
+    public function test_recurring_process_skips_if_manually_logged_today()
+    {
+        Notification::fake();
+        Carbon::setTestNow('2026-06-08 10:00:00');
+
+        // 1. Người dùng đã tự tạo thủ công một giao dịch y hệt hôm nay
+        DB::table('transactions')->insert([
+            'id' => (string) Str::uuid7(),
+            'user_id' => $this->userId,
+            'wallet_id' => $this->walletId,
+            'category_id' => $this->categoryId,
+            'type' => 'expense',
+            'amount' => 80000.00,
+            'amount_in_user_currency' => 80000.00,
+            'currency_code' => 'VND',
+            'title' => 'Tiền điện hàng ngày',
+            'status' => 'completed',
+            'transaction_date' => '2026-06-08 08:30:00', // Sớm hơn trong ngày
+            'source_type' => 'manual',
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        // 2. Tạo một rule cho ngày 08/06
+        $rule = RecurringRule::create([
+            'id' => (string) Str::uuid7(),
+            'user_id' => $this->userId,
+            'wallet_id' => $this->walletId,
+            'category_id' => $this->categoryId,
+            'type' => 'expense',
+            'amount' => 80000.00,
+            'title' => 'Tiền điện hàng ngày',
+            'frequency' => 'daily',
+            'interval_value' => 1,
+            'start_date' => Carbon::parse('2026-06-08 10:00:00'),
+            'next_run_at' => Carbon::parse('2026-06-08 10:00:00'),
+            'is_active' => true
+        ]);
+
+        // 3. Chạy command định kỳ
+        $this->artisan('recurring:process')->assertExitCode(0);
+
+        // Kế hoạch quét định kỳ phải bị BỎ QUA (skipped) -> không tạo thêm transaction mới
+        $this->assertCount(1, Transaction::where('title', 'Tiền điện hàng ngày')->get()); // Chỉ có 1 giao dịch thủ công, không có giao dịch thứ 2 từ scheduler
+        
+        $execution = RecurringExecution::where('recurring_rule_id', $rule->id)->first();
+        $this->assertNotNull($execution);
+        $this->assertEquals('skipped', $execution->status);
+
+        // Ngày chạy tiếp theo vẫn phải được tăng lên ngày mai
+        $rule->refresh();
+        $this->assertEquals('2026-06-09 10:00:00', $rule->next_run_at->toDateTimeString());
+
+        Carbon::setTestNow();
+    }
+
+    /**
+     * Test 6: Nếu scheduler đã chạy tự động hôm nay, người dùng KHÔNG ĐƯỢC PHÉP tự ghi nhận thủ công nữa (chặn trùng lặp)
+     */
+    public function test_manual_logging_blocked_if_recurring_already_logged_today()
+    {
+        Notification::fake();
+        Carbon::setTestNow('2026-06-08 10:00:00');
+
+        // 1. Tạo giao dịch đã được tự động chạy từ scheduler ngày hôm nay
+        DB::table('transactions')->insert([
+            'id' => (string) Str::uuid7(),
+            'user_id' => $this->userId,
+            'wallet_id' => $this->walletId,
+            'category_id' => $this->categoryId,
+            'type' => 'expense',
+            'amount' => 120000.00,
+            'amount_in_user_currency' => 120000.00,
+            'currency_code' => 'VND',
+            'title' => 'Tiền mạng cáp quang',
+            'status' => 'completed',
+            'transaction_date' => '2026-06-08 10:00:00',
+            'source_type' => 'recurring',
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        // 2. Thử tạo thủ công giao dịch y hệt thông qua API
+        $response = $this->postJson('/api/transactions', [
+            'wallet_id' => $this->walletId,
+            'category_id' => $this->categoryId,
+            'type' => 'expense',
+            'amount' => 120000.00,
+            'title' => 'Tiền mạng cáp quang',
+            'transaction_date' => '2026-06-08 11:30:00', // Cùng ngày
+        ], [
+            'Authorization' => 'Bearer ' . $this->token
+        ]);
+
+        // Phải bị lỗi chặn trùng lặp (trả về 400 từ Controller khi bắt được exception)
+        $response->assertStatus(400);
+        $response->assertJsonPath('message', __('messages.transaction_already_logged_automatically'));
+
+        Carbon::setTestNow();
+    }
 }

@@ -102,5 +102,6 @@ return [
     'pause_recurring_rule_success' => 'Recurring rule paused successfully.',
     'recurring_execution_insufficient_balance' => 'Insufficient wallet balance to execute recurring transaction (Method 2).',
     'recurring_default_notes' => 'Recurring transaction automatically created from rule.',
+    'transaction_already_logged_automatically' => 'This transaction has already been automatically recorded today by the recurring schedule.',
 ];
 
