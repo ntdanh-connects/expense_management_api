@@ -273,16 +273,28 @@ class ReportController extends Controller
                     return Carbon::parse($item->transaction_date)->setTimezone($userTimezone)->toDateString();
                 });
 
-                return $grouped->map(function($items, $dateStr) use ($userTimezone) {
+                $result = [];
+                $current = $startDate->copy();
+                $end = $endDate->copy();
+
+                while ($current->lte($end)) {
+                    $dateStr = $current->toDateString();
+                    $items = $grouped->get($dateStr, collect([]));
+
                     $income = $items->where('type', 'income')->sum('amount_in_user_currency');
                     $expense = $items->where('type', 'expense')->sum('amount_in_user_currency');
-                    return [
-                        'label' => Carbon::parse($dateStr, $userTimezone)->format('d/m'),
+
+                    $result[] = [
+                        'label' => $current->format('d/m'),
                         'date' => $dateStr,
                         'income' => (float) $income,
                         'expense' => (float) $expense
                     ];
-                })->values()->toArray();
+
+                    $current->addDay();
+                }
+
+                return $result;
             } else {
                 $grouped = $transactions->groupBy(function($item) use ($userTimezone) {
                     return Carbon::parse($item->transaction_date)->setTimezone($userTimezone)->format('Y-m');
