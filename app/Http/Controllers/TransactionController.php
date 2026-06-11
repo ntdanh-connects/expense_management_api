@@ -282,10 +282,15 @@ class TransactionController extends Controller
             ]);
 
             // Lưu file tạm vào storage
-            $diskName  = config('filesystems.default') === 's3' ? 's3' : 'local';
+            $diskName  = config('filesystems.default') === 's3' ? 's3' : 'public';
             $disk = Storage::disk($diskName);
             $filePath  = $request->file('file')->store("imports/{$userId}", $diskName);
-            $fileUrl   = $disk->url($filePath);
+            
+            if ($diskName === 's3') {
+                $fileUrl = $disk->temporaryUrl($filePath, now()->addDays(7));
+            } else {
+                $fileUrl = $disk->url($filePath);
+            }
 
             // Tạo bản ghi import_jobs với trạng thái pending sử dụng Eloquent
             $import = ImportJob::create([

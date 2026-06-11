@@ -50,7 +50,7 @@ class ImportTransactionsJob implements ShouldQueue
             }
 
             // 2. Đọc file CSV từ Storage
-            $diskName = config('filesystems.default') === 's3' ? 's3' : 'local';
+            $diskName = config('filesystems.default') === 's3' ? 's3' : 'public';
             $disk = Storage::disk($diskName);
 
             if (!$disk->exists($this->filePath)) {
@@ -224,7 +224,12 @@ class ImportTransactionsJob implements ShouldQueue
 
                 $errFilename = "imports/{$this->userId}/errors_{$this->importId}.csv";
                 $disk->put($errFilename, $errCsvContent);
-                $errorFileUrl = $disk->url($errFilename);
+                
+                if ($diskName === 's3') {
+                    $errorFileUrl = $disk->temporaryUrl($errFilename, now()->addDays(7));
+                } else {
+                    $errorFileUrl = $disk->url($errFilename);
+                }
             }
 
             // 5. Cập nhật trạng thái import_jobs sử dụng Eloquent

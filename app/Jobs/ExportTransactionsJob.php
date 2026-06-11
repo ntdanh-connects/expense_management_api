@@ -129,11 +129,16 @@ class ExportTransactionsJob implements ShouldQueue
 
             // 4. Lưu file lên S3 / Local Disk
             $filename = "exports/{$this->userId}/transactions_{$this->exportId}.csv";
-            $diskName = config('filesystems.default') === 's3' ? 's3' : 'local';
+            $diskName = config('filesystems.default') === 's3' ? 's3' : 'public';
             $disk = Storage::disk($diskName);
             
             $disk->put($filename, $csvContent);
-            $fileUrl = $disk->url($filename);
+            
+            if ($diskName === 's3') {
+                $fileUrl = $disk->temporaryUrl($filename, now()->addDays(7));
+            } else {
+                $fileUrl = $disk->url($filename);
+            }
 
             // 5. Cập nhật trạng thái completed sử dụng Eloquent
             ReportExport::where('id', $this->exportId)->update([
