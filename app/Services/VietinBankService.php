@@ -68,8 +68,13 @@ class VietinBankService
      */
     public function lookupAccountName(string $bankBin, string $accountNumber): ?string
     {
-        $clientId = env('VIETQR_CLIENT_ID', '');
-        $apiKey = env('VIETQR_API_KEY', '');
+        if (app()->environment('testing')) {
+            $clientId = 'test';
+            $apiKey = 'test';
+        } else {
+            $clientId = env('VIETQR_CLIENT_ID', '');
+            $apiKey = env('VIETQR_API_KEY', '');
+        }
         
         if (empty($clientId) || empty($apiKey)) {
             return null;
@@ -118,11 +123,13 @@ class VietinBankService
                 'is_mocked' => false
             ];
         }
-
+ 
         // 2. If we have credentials configured, we could theoretically call the real VietinBank Sandbox API.
-        // However, to ensure it works out of the box, we check credentials. If empty, we mock immediately.
         if (empty($this->clientId) || empty($this->clientSecret)) {
-            return $this->getMockAccountName($bankBin, $accountNumber);
+            return [
+                'status' => 'error',
+                'message' => 'Không thể xác định chủ tài khoản: Thiếu cấu hình API Key hoặc tài khoản không tồn tại.'
+            ];
         }
  
         try {
@@ -149,11 +156,13 @@ class VietinBankService
                 }
             }
         } catch (\Throwable $e) {
-            Log::warning("VietinBank API inquiry failed: {$e->getMessage()}. Falling back to mock.");
+            Log::warning("VietinBank API inquiry failed: {$e->getMessage()}.");
         }
  
-        // Fallback to Mock
-        return $this->getMockAccountName($bankBin, $accountNumber);
+        return [
+            'status' => 'error',
+            'message' => 'Không thể kết nối đến hệ thống ngân hàng để vấn tin tài khoản.'
+        ];
     }
  
     /**
@@ -222,39 +231,6 @@ class VietinBankService
             'description' => $description,
             'transferred_at' => now()->toIso8601String(),
             'message' => 'Simulated VietinBank Sandbox transaction completed successfully.'
-        ];
-    }
- 
-    /**
-     * Generate nice mock names for simulation.
-     */
-    private function getMockAccountName(string $bankBin, string $accountNumber): array
-    {
-        $bank = $this->getBankByBin($bankBin);
-        $bankName = $bank ? $bank['shortName'] : 'Bank';
-        
-        // Custom mock rules based on account number pattern
-        if (str_contains($accountNumber, '1111') || str_contains($accountNumber, '777')) {
-            $name = 'CONG TY CO PHAN HIGHLANDS COFFEE';
-        } elseif (str_contains($accountNumber, '2222')) {
-            $name = 'CONG TY CO PHAN PHUC LONG';
-        } elseif (str_contains($accountNumber, '3333')) {
-            $name = 'SIEU THI TIEN LOI CIRCLE K';
-        } elseif ($accountNumber === '0393181781') {
-            $name = 'NGO THANH DANH';
-        } elseif ($accountNumber === '108003515919') {
-            $name = 'TRAN NGUYEN ANH THO';
-        } else {
-            $name = 'UNKNOWN RECIPIENT';
-        }
- 
-        return [
-            'status' => 'success',
-            'account_name' => $name,
-            'account_number' => $accountNumber,
-            'bank_bin' => $bankBin,
-            'bank_name' => $bankName,
-            'is_mocked' => true
         ];
     }
 }

@@ -65,6 +65,13 @@ class QrTransferTest extends TestCase
                     'qrDataURL' => 'data:image/png;base64,mockedimage'
                 ]
             ], 200),
+            'https://api.vietqr.io/v2/lookup' => \Illuminate\Support\Facades\Http::response([
+                'code' => '00',
+                'desc' => 'Success',
+                'data' => [
+                    'accountName' => 'CONG TY CO PHAN HIGHLANDS COFFEE'
+                ]
+            ], 200),
         ]);
     }
  
