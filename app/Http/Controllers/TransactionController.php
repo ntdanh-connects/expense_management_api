@@ -92,15 +92,15 @@ class TransactionController extends Controller
 
             $wallet = DB::table('wallets')->where('id', $validated['wallet_id'])->where('user_id', $userId)->first();
             if (!$wallet) {
-                return response()->json(['status' => 'error', 'message' => 'Ví không tồn tại hoặc bạn không có quyền sử dụng ví này.'], 404);
+                return response()->json(['status' => 'error', 'message' => __('messages.wallet_not_found_or_unauthorized')], 404);
             }
 
             if ($wallet->type !== 'cash') {
-                return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công chỉ cho phép sử dụng ví Tiền mặt.'], 400);
+                return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_cash_only')], 400);
             }
 
             if ($wallet->currency_code !== 'VND') {
-                return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công chỉ hỗ trợ đơn vị tiền tệ VND.'], 400);
+                return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_vnd_only')], 400);
             }
  
             $transaction = $this->transactionService->createTransaction($userId, $validated, $request->file('attachment'), $request->file('attachments'));
@@ -170,13 +170,13 @@ class TransactionController extends Controller
             if (isset($validated['wallet_id'])) {
                 $wallet = DB::table('wallets')->where('id', $validated['wallet_id'])->where('user_id', $userId)->first();
                 if (!$wallet) {
-                    return response()->json(['status' => 'error', 'message' => 'Ví không tồn tại hoặc bạn không có quyền sử dụng ví này.'], 404);
+                    return response()->json(['status' => 'error', 'message' => __('messages.wallet_not_found_or_unauthorized')], 404);
                 }
                 if ($wallet->type !== 'cash') {
-                    return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công chỉ cho phép sử dụng ví Tiền mặt.'], 400);
+                    return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_cash_only')], 400);
                 }
                 if ($wallet->currency_code !== 'VND') {
-                    return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công chỉ hỗ trợ đơn vị tiền tệ VND.'], 400);
+                    return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_vnd_only')], 400);
                 }
             }
  

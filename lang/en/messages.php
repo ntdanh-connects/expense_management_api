@@ -103,5 +103,13 @@ return [
     'recurring_execution_insufficient_balance' => 'Insufficient wallet balance to execute recurring transaction (Method 2).',
     'recurring_default_notes' => 'Recurring transaction automatically created from rule.',
     'transaction_already_logged_automatically' => 'This transaction has already been automatically recorded today by the recurring schedule.',
+
+    // Constraints validations
+    'qr_cash_not_allowed' => 'QR transfer is not allowed using cash wallets.',
+    'qr_external_foreign_currency_not_allowed' => 'External bank transfers via QR are only supported in VND currency.',
+    'manual_transaction_cash_only' => 'Manual transactions are only allowed using Cash wallets.',
+    'manual_transaction_vnd_only' => 'Manual transactions only support VND currency.',
+    'recurring_wallet_no_cash' => 'Recurring transactions are only supported using Bank or E-wallet wallets.',
+    'recurring_wallet_vnd_only' => 'Recurring transactions only support VND currency.',
 ];
 

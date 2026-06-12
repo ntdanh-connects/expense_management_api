@@ -66,15 +66,15 @@ class RecurringRuleController extends Controller
 
             $wallet = DB::table('wallets')->where('id', $validated['wallet_id'])->where('user_id', $userId)->first();
             if (!$wallet) {
-                return response()->json(['status' => 'error', 'message' => 'Ví không tồn tại hoặc bạn không có quyền sử dụng ví này.'], 404);
+                return response()->json(['status' => 'error', 'message' => __('messages.wallet_not_found_or_unauthorized')], 404);
             }
 
             if ($wallet->type === 'cash') {
-                return response()->json(['status' => 'error', 'message' => 'Giao dịch định kỳ chỉ hỗ trợ ví Ngân hàng hoặc Ví điện tử.'], 400);
+                return response()->json(['status' => 'error', 'message' => __('messages.recurring_wallet_no_cash')], 400);
             }
 
             if ($wallet->currency_code !== 'VND') {
-                return response()->json(['status' => 'error', 'message' => 'Giao dịch định kỳ chỉ hỗ trợ đơn vị tiền tệ VND.'], 400);
+                return response()->json(['status' => 'error', 'message' => __('messages.recurring_wallet_vnd_only')], 400);
             }
  
             $rule = $this->recurringService->createRule($userId, $validated);
@@ -117,13 +117,13 @@ class RecurringRuleController extends Controller
             if (isset($validated['wallet_id'])) {
                 $wallet = DB::table('wallets')->where('id', $validated['wallet_id'])->where('user_id', $userId)->first();
                 if (!$wallet) {
-                    return response()->json(['status' => 'error', 'message' => 'Ví không tồn tại hoặc bạn không có quyền sử dụng ví này.'], 404);
+                    return response()->json(['status' => 'error', 'message' => __('messages.wallet_not_found_or_unauthorized')], 404);
                 }
                 if ($wallet->type === 'cash') {
-                    return response()->json(['status' => 'error', 'message' => 'Giao dịch định kỳ chỉ hỗ trợ ví Ngân hàng hoặc Ví điện tử.'], 400);
+                    return response()->json(['status' => 'error', 'message' => __('messages.recurring_wallet_no_cash')], 400);
                 }
                 if ($wallet->currency_code !== 'VND') {
-                    return response()->json(['status' => 'error', 'message' => 'Giao dịch định kỳ chỉ hỗ trợ đơn vị tiền tệ VND.'], 400);
+                    return response()->json(['status' => 'error', 'message' => __('messages.recurring_wallet_vnd_only')], 400);
                 }
             }
  

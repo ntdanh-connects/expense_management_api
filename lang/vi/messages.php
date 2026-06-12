@@ -103,5 +103,13 @@ return [
     'recurring_execution_insufficient_balance' => 'Không đủ số dư ví để thực thi giao dịch định kỳ (Phương án 2).',
     'recurring_default_notes' => 'Giao dịch định kỳ tự động tạo từ quy tắc.',
     'transaction_already_logged_automatically' => 'Giao dịch này đã được tự động ghi nhận hôm nay theo lịch định kỳ.',
+
+    // Constraints validations
+    'qr_cash_not_allowed' => 'Không cho phép thực hiện giao dịch quét QR bằng ví tiền mặt.',
+    'qr_external_foreign_currency_not_allowed' => 'Chuyển khoản liên ngân hàng bằng QR chỉ hỗ trợ đơn vị tiền tệ VND.',
+    'manual_transaction_cash_only' => 'Giao dịch thủ công chỉ cho phép sử dụng ví Tiền mặt.',
+    'manual_transaction_vnd_only' => 'Giao dịch thủ công chỉ hỗ trợ đơn vị tiền tệ VND.',
+    'recurring_wallet_no_cash' => 'Giao dịch định kỳ chỉ hỗ trợ ví Ngân hàng hoặc Ví điện tử.',
+    'recurring_wallet_vnd_only' => 'Giao dịch định kỳ chỉ hỗ trợ đơn vị tiền tệ VND.',
 ];
 
