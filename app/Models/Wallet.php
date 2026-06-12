@@ -16,7 +16,7 @@ class Wallet extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
-        'id', 'user_id', 'name', 'type', 'currency_code', 'icon', 'color', 'is_hidden'
+        'id', 'user_id', 'name', 'type', 'currency_code', 'icon', 'color', 'is_hidden', 'bank_code', 'account_number'
     ];
 
     protected $casts = [

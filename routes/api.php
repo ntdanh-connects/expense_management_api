@@ -14,6 +14,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\BroadcastController;
 use App\Http\Controllers\CronController;
 use App\Http\Controllers\DeviceTokenController;
+use App\Http\Controllers\QrTransferController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::get('/verify-email/{id}/{hash}', [AuthController::class, 'verify'])
@@ -96,6 +97,13 @@ Route::middleware(['custom.auth'])->group(function () {
     Route::post('/notifications/read-all', [NotificationController::class, 'readAll']);
     Route::post('/notifications/{id}/read', [NotificationController::class, 'read']);
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
+
+    // Module 9: Quét mã QR & Chuyển tiền ảo
+    Route::post('/qr/decode', [QrTransferController::class, 'decode']);
+    Route::get('/qr/generate-my-qr', [QrTransferController::class, 'generateMyQr']);
+    Route::post('/qr/transfer', [QrTransferController::class, 'transfer']);
+    Route::get('/payees', [QrTransferController::class, 'listPayees']);
+    Route::delete('/payees/{id}', [QrTransferController::class, 'deletePayee']);
 
     // Cấu hình FCM Device Tokens
     Route::post('/user/device-token', [DeviceTokenController::class, 'register']);

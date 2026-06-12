@@ -290,4 +290,223 @@ class WalletService {
             ->orderBy('transactions.created_at', 'desc')
             ->paginate($perPage);
     }
+
+    /**
+     * Chuyển tiền P2P giữa 2 người dùng khác nhau trong hệ thống
+     */
+    public function p2pTransfer(string $fromUserId, string $toUserId, string $fromWalletId, string $toWalletId, float $amount, ?string $notes = null, ?string $timezone = null)
+    {
+        return DB::transaction(function () use ($fromUserId, $toUserId, $fromWalletId, $toWalletId, $amount, $notes, $timezone) {
+            if ($fromWalletId === $toWalletId) {
+                throw new \Exception(__('messages.wallets_same'));
+            }
+
+            if ($amount <= 0) {
+                throw new \Exception(__('messages.amount_must_be_positive'));
+            }
+
+            $fromWallet = $this->walletRepository->find($fromWalletId);
+            $toWallet = $this->walletRepository->find($toWalletId);
+
+            if (!$fromWallet || $fromWallet->user_id !== $fromUserId) {
+                throw new \Exception(__('messages.source_wallet_not_found'));
+            }
+
+            if (!$toWallet || $toWallet->user_id !== $toUserId) {
+                throw new \Exception(__('messages.target_wallet_not_found'));
+            }
+
+            $fromBalance = DB::table('wallet_balances')->where('wallet_id', $fromWalletId)->lockForUpdate()->first();
+            $toBalance = DB::table('wallet_balances')->where('wallet_id', $toWalletId)->lockForUpdate()->first();
+
+            if (!$fromBalance || !$toBalance) {
+                throw new \Exception("Không tìm thấy thông tin số dư của ví.");
+            }
+
+            if (bccomp($fromBalance->available_balance, $amount, 2) === -1) {
+                throw new \Exception(__('messages.insufficient_balance'));
+            }
+
+            $userTimezone = DB::table('user_preferences')->where('user_id', $fromUserId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
+            $timezone = $timezone ?? $userTimezone;
+
+            $fromCurrency = $fromWallet->currency_code ?? 'VND';
+            $toCurrency = $toWallet->currency_code ?? 'VND';
+
+            $rate = $this->exchangeRateService->getRate($fromCurrency, $toCurrency);
+            $convertedAmount = (float) bcmul(number_format($amount, 4, '.', ''), number_format($rate, 6, '.', ''), 4);
+
+            // Quy đổi số tiền sang tiền tệ hiển thị của người gửi
+            $fromUserCurrency = DB::table('user_preferences')->where('user_id', $fromUserId)->value('currency') ?? 'VND';
+            $expenseAmountInUserCurrency = ($fromCurrency === $fromUserCurrency) ? $amount : 
+                (float) bcmul(number_format($amount, 4, '.', ''), number_format($this->exchangeRateService->getRate($fromCurrency, $fromUserCurrency), 6, '.', ''), 4);
+
+            // Quy đổi số tiền sang tiền tệ hiển thị của người nhận
+            $toUserCurrency = DB::table('user_preferences')->where('user_id', $toUserId)->value('currency') ?? 'VND';
+            $incomeAmountInUserCurrency = ($toCurrency === $toUserCurrency) ? $convertedAmount : 
+                (float) bcmul(number_format($convertedAmount, 4, '.', ''), number_format($this->exchangeRateService->getRate($toCurrency, $toUserCurrency), 6, '.', ''), 4);
+
+            $transferId = (string) Str::uuid7();
+            $expenseId = (string) Str::uuid7();
+            $incomeId = (string) Str::uuid7();
+
+            $recipientProfile = DB::table('user_profiles')->where('user_id', $toUserId)->first();
+            $recipientName = $recipientProfile ? $recipientProfile->full_name : 'Người dùng';
+
+            $senderProfile = DB::table('user_profiles')->where('user_id', $fromUserId)->first();
+            $senderName = $senderProfile ? $senderProfile->full_name : 'Người gửi';
+
+            // Giao dịch 1: Chi tiền từ người gửi
+            DB::table('transactions')->insert([
+                'id'                      => $expenseId,
+                'user_id'                 => $fromUserId,
+                'wallet_id'               => $fromWalletId,
+                'category_id'             => null,
+                'type'                    => 'expense',
+                'status'                  => 'completed',
+                'amount'                  => $amount,
+                'currency_code'           => $fromCurrency,
+                'exchange_rate'           => 1.000000,
+                'amount_in_user_currency' => $expenseAmountInUserCurrency,
+                'title'                   => $notes ?? "Chuyển tiền đến {$recipientName}",
+                'notes'                   => $notes,
+                'transaction_date'        => now(),
+                'source_type'             => 'transfer',
+                'source_id'               => $transferId,
+                'timezone'                => $timezone,
+                'created_at'              => now(),
+                'updated_at'              => now()
+            ]);
+
+            // Giao dịch 2: Nhận tiền từ người nhận
+            DB::table('transactions')->insert([
+                'id'                      => $incomeId,
+                'user_id'                 => $toUserId,
+                'wallet_id'               => $toWalletId,
+                'category_id'             => null,
+                'type'                    => 'income',
+                'status'                  => 'completed',
+                'amount'                  => $convertedAmount,
+                'currency_code'           => $toCurrency,
+                'exchange_rate'           => 1.000000,
+                'amount_in_user_currency' => $incomeAmountInUserCurrency,
+                'title'                   => $notes ?? "Nhận tiền từ {$senderName}",
+                'notes'                   => $notes,
+                'transaction_date'        => now(),
+                'source_type'             => 'transfer',
+                'source_id'               => $transferId,
+                'timezone'                => DB::table('user_preferences')->where('user_id', $toUserId)->value('timezone') ?? 'Asia/Ho_Chi_Minh',
+                'created_at'              => now(),
+                'updated_at'              => now()
+            ]);
+
+            // Ghi nhận vào bảng wallet_transfers
+            DB::table('wallet_transfers')->insert([
+                'id'                     => $transferId,
+                'from_wallet_id'         => $fromWalletId,
+                'to_wallet_id'           => $toWalletId,
+                'amount'                 => $amount,
+                'expense_transaction_id' => $expenseId,
+                'income_transaction_id'  => $incomeId,
+                'transferred_at'         => now(),
+                'timezone'               => $timezone,
+                'created_at'             => now()
+            ]);
+
+            // Cập nhật số dư
+            DB::table('wallet_balances')->where('wallet_id', $fromWalletId)->update([
+                'available_balance'   => bcsub($fromBalance->available_balance, $amount, 2),
+                'last_transaction_id' => $expenseId,
+                'updated_at'          => now()
+            ]);
+
+            DB::table('wallet_balances')->where('wallet_id', $toWalletId)->update([
+                'available_balance'   => bcadd($toBalance->available_balance, $convertedAmount, 2),
+                'last_transaction_id' => $incomeId,
+                'updated_at'          => now()
+            ]);
+
+            return [
+                'transfer_id' => $transferId,
+                'expense_id' => $expenseId,
+                'income_id' => $incomeId,
+                'amount' => $amount,
+                'recipient_name' => $recipientName
+            ];
+        });
+    }
+
+    /**
+     * Chuyển tiền ảo đến tài khoản ngân hàng ngoài (VietQR)
+     */
+    public function bankTransfer(string $userId, string $fromWalletId, string $bankCode, string $accountNumber, string $accountName, float $amount, ?string $notes = null, ?string $timezone = null)
+    {
+        return DB::transaction(function () use ($userId, $fromWalletId, $bankCode, $accountNumber, $accountName, $amount, $notes, $timezone) {
+            if ($amount <= 0) {
+                throw new \Exception(__('messages.amount_must_be_positive'));
+            }
+
+            $fromWallet = $this->walletRepository->find($fromWalletId);
+
+            if (!$fromWallet || $fromWallet->user_id !== $userId) {
+                throw new \Exception(__('messages.source_wallet_not_found'));
+            }
+
+            $fromBalance = DB::table('wallet_balances')->where('wallet_id', $fromWalletId)->lockForUpdate()->first();
+
+            if (!$fromBalance) {
+                throw new \Exception("Không tìm thấy thông tin số dư của ví.");
+            }
+
+            if (bccomp($fromBalance->available_balance, $amount, 2) === -1) {
+                throw new \Exception(__('messages.insufficient_balance'));
+            }
+
+            $userTimezone = DB::table('user_preferences')->where('user_id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
+            $timezone = $timezone ?? $userTimezone;
+
+            $fromCurrency = $fromWallet->currency_code ?? 'VND';
+            $userCurrency = DB::table('user_preferences')->where('user_id', $userId)->value('currency') ?? 'VND';
+            
+            $expenseAmountInUserCurrency = ($fromCurrency === $userCurrency) ? $amount : 
+                (float) bcmul(number_format($amount, 4, '.', ''), number_format($this->exchangeRateService->getRate($fromCurrency, $userCurrency), 6, '.', ''), 4);
+
+            $expenseId = (string) Str::uuid7();
+
+            // Giao dịch Chi tiêu (Expense) của ví nguồn
+            DB::table('transactions')->insert([
+                'id'                      => $expenseId,
+                'user_id'                 => $userId,
+                'wallet_id'               => $fromWalletId,
+                'category_id'             => null,
+                'type'                    => 'expense',
+                'status'                  => 'completed',
+                'amount'                  => $amount,
+                'currency_code'           => $fromCurrency,
+                'exchange_rate'           => 1.000000,
+                'amount_in_user_currency' => $expenseAmountInUserCurrency,
+                'title'                   => $notes ?? "Chuyển khoản đến {$accountName} ({$accountNumber})",
+                'notes'                   => $notes,
+                'transaction_date'        => now(),
+                'source_type'             => 'transfer',
+                'source_id'               => null, // Không có ví đối ứng trong app
+                'timezone'                => $timezone,
+                'created_at'              => now(),
+                'updated_at'              => now()
+            ]);
+
+            // Cập nhật số dư
+            DB::table('wallet_balances')->where('wallet_id', $fromWalletId)->update([
+                'available_balance'   => bcsub($fromBalance->available_balance, $amount, 2),
+                'last_transaction_id' => $expenseId,
+                'updated_at'          => now()
+            ]);
+
+            return [
+                'expense_id' => $expenseId,
+                'amount' => $amount,
+                'payee_name' => $accountName
+            ];
+        });
+    }
 }

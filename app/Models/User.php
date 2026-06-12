@@ -14,7 +14,19 @@ class User extends Authenticatable {
     public $incrementing = false;
     protected $keyType = 'string';
 
-    protected $fillable = ['user_id', 'email', 'status', 'email_verified_at', 'google_id', 'github_id'];
+    protected $fillable = ['user_id', 'email', 'status', 'email_verified_at', 'google_id', 'github_id', 'identifier'];
+
+    protected static function booted()
+    {
+        static::creating(function ($user) {
+            if (empty($user->identifier)) {
+                do {
+                    $identifier = 'USR' . str_pad(rand(100000, 999999), 6, '0', STR_PAD_LEFT);
+                } while (static::where('identifier', $identifier)->exists());
+                $user->identifier = $identifier;
+            }
+        });
+    }
 
     public function credential()
     {
@@ -36,4 +48,9 @@ class User extends Authenticatable {
     public function sessions() {
     return $this->hasMany(UserSession::class, 'user_id', 'user_id');
 }
+
+    public function savedPayees()
+    {
+        return $this->hasMany(SavedPayee::class, 'user_id', 'user_id');
+    }
 }
