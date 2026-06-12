@@ -28,6 +28,17 @@ Route::post('/auth/forgot-password', [AuthController::class, 'sendResetLinkEmail
 // Web Trigger Cron (UptimeRobot ping)
 Route::get('/cron-trigger', [CronController::class, 'trigger']);
 
+// Temporary diagnostic route to check Render environment variables
+Route::get('/check-vietqr-env', function () {
+    return response()->json([
+        'vietqr_client_id_set' => !empty(env('VIETQR_CLIENT_ID')),
+        'vietqr_api_key_set' => !empty(env('VIETQR_API_KEY')),
+        'vietqr_client_id_prefix' => substr(env('VIETQR_CLIENT_ID', ''), 0, 4),
+        'vietqr_api_key_prefix' => substr(env('VIETQR_API_KEY', ''), 0, 4),
+        'app_env' => env('APP_ENV'),
+    ]);
+});
+
 // Wallet and Protected User routes
 Route::middleware(['custom.auth'])->group(function () {
     // Broadcast auth — Pusher sẽ gọi endpoint này để xác thực kênh private
