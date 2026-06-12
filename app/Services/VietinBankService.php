@@ -245,13 +245,7 @@ class VietinBankService
         } elseif ($accountNumber === '108003515919') {
             $name = 'TRAN NGUYEN ANH THO';
         } else {
-            // Generate a realistic Vietnamese name based on checksum
-            $names = [
-                'NGUYEN VAN A', 'TRAN THI B', 'LE VAN CUONG', 'PHAM MINH TUAN', 
-                'DANG THI MAI', 'NGO THANH DANH', 'VU HONG SON', 'HOANG VAN MINH'
-            ];
-            $index = abs(crc32($accountNumber)) % count($names);
-            $name = $names[$index];
+            $name = 'UNKNOWN RECIPIENT';
         }
  
         return [
