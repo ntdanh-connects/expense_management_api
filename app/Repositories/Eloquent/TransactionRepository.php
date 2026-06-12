@@ -44,7 +44,14 @@ class TransactionRepository extends BaseRepository implements TransactionReposit
             if (is_array($filters['category_id'])) {
                 $query->whereIn('transactions.category_id', $filters['category_id']);
             } else {
-                $query->where('transactions.category_id', $filters['category_id']);
+                $catId = $filters['category_id'];
+                $childIds = DB::table('categories')
+                    ->where('parent_id', $catId)
+                    ->whereNull('deleted_at')
+                    ->pluck('id')
+                    ->toArray();
+                $allIds = array_merge([$catId], $childIds);
+                $query->whereIn('transactions.category_id', $allIds);
             }
         }
 
