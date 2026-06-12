@@ -71,7 +71,8 @@ class UpdateStatistics
             return;
         }
 
-        $carbonDate = Carbon::parse($date);
+        $userTimezone = DB::table('user_preferences')->where('user_id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
+        $carbonDate = Carbon::parse($date)->setTimezone($userTimezone);
         $dateStr = $carbonDate->toDateString();
         $month = $carbonDate->month;
         $year = $carbonDate->year;
