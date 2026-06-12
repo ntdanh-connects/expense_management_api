@@ -39,6 +39,35 @@ Route::get('/check-vietqr-env', function () {
     ]);
 });
 
+// Temporary route to test real VietQR lookup API
+Route::get('/test-lookup', function (Illuminate\Http\Request $request) {
+    $bin = $request->query('bin', '970422');
+    $accountNumber = $request->query('accountNumber', 'VQRQAAXBR7968');
+    
+    $clientId = env('VIETQR_CLIENT_ID', '');
+    $apiKey = env('VIETQR_API_KEY', '');
+    
+    try {
+        $response = Illuminate\Support\Facades\Http::withHeaders([
+            'x-client-id' => $clientId,
+            'x-api-key' => $apiKey,
+            'Content-Type' => 'application/json',
+        ])->post('https://api.vietqr.io/v2/lookup', [
+            'bin' => $bin,
+            'accountNumber' => $accountNumber,
+        ]);
+        
+        return response()->json([
+            'status' => $response->status(),
+            'body' => $response->json(),
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'error' => $e->getMessage(),
+        ]);
+    }
+});
+
 // Wallet and Protected User routes
 Route::middleware(['custom.auth'])->group(function () {
     // Broadcast auth — Pusher sẽ gọi endpoint này để xác thực kênh private
