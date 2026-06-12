@@ -286,6 +286,21 @@ class QrTransferController extends Controller
         ]);
  
         try {
+            $fromWallet = DB::table('wallets')->where('id', $validated['from_wallet_id'])->where('user_id', $userId)->first();
+            if (!$fromWallet) {
+                return response()->json(['status' => 'error', 'message' => 'Ví nguồn không tồn tại hoặc bạn không có quyền sử dụng ví này.'], 404);
+            }
+
+            // 1. Quét mã QR không cho phép bằng ví tiền mặt (cash)
+            if ($fromWallet->type === 'cash') {
+                return response()->json(['status' => 'error', 'message' => 'Không cho phép thực hiện giao dịch quét QR bằng ví tiền mặt.'], 400);
+            }
+
+            // 2. Chuyển khoản ngoài (external) không cho phép bằng ngoại tệ (chỉ VND)
+            if ($validated['payee_type'] === 'external' && $fromWallet->currency_code !== 'VND') {
+                return response()->json(['status' => 'error', 'message' => 'Chuyển khoản liên ngân hàng bằng QR chỉ hỗ trợ đơn vị tiền tệ VND.'], 400);
+            }
+
             if ($validated['payee_type'] === 'internal') {
                 $recipientId = $validated['payee_user_id'];
  

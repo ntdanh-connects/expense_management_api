@@ -64,6 +64,19 @@ class RecurringRuleController extends Controller
                 'is_active'      => 'nullable|boolean'
             ]);
 
+            $wallet = DB::table('wallets')->where('id', $validated['wallet_id'])->where('user_id', $userId)->first();
+            if (!$wallet) {
+                return response()->json(['status' => 'error', 'message' => 'Ví không tồn tại hoặc bạn không có quyền sử dụng ví này.'], 404);
+            }
+
+            if ($wallet->type === 'cash') {
+                return response()->json(['status' => 'error', 'message' => 'Giao dịch định kỳ chỉ hỗ trợ ví Ngân hàng hoặc Ví điện tử.'], 400);
+            }
+
+            if ($wallet->currency_code !== 'VND') {
+                return response()->json(['status' => 'error', 'message' => 'Giao dịch định kỳ chỉ hỗ trợ đơn vị tiền tệ VND.'], 400);
+            }
+ 
             $rule = $this->recurringService->createRule($userId, $validated);
 
             return response()->json([
@@ -101,6 +114,19 @@ class RecurringRuleController extends Controller
                 'is_active'      => 'sometimes|required|boolean'
             ]);
 
+            if (isset($validated['wallet_id'])) {
+                $wallet = DB::table('wallets')->where('id', $validated['wallet_id'])->where('user_id', $userId)->first();
+                if (!$wallet) {
+                    return response()->json(['status' => 'error', 'message' => 'Ví không tồn tại hoặc bạn không có quyền sử dụng ví này.'], 404);
+                }
+                if ($wallet->type === 'cash') {
+                    return response()->json(['status' => 'error', 'message' => 'Giao dịch định kỳ chỉ hỗ trợ ví Ngân hàng hoặc Ví điện tử.'], 400);
+                }
+                if ($wallet->currency_code !== 'VND') {
+                    return response()->json(['status' => 'error', 'message' => 'Giao dịch định kỳ chỉ hỗ trợ đơn vị tiền tệ VND.'], 400);
+                }
+            }
+ 
             $rule = $this->recurringService->updateRule($id, $userId, $validated);
 
             return response()->json([

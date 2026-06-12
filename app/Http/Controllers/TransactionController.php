@@ -90,6 +90,19 @@ class TransactionController extends Controller
                 'attachments.*'    => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400'
             ]);
 
+            $wallet = DB::table('wallets')->where('id', $validated['wallet_id'])->where('user_id', $userId)->first();
+            if (!$wallet) {
+                return response()->json(['status' => 'error', 'message' => 'Ví không tồn tại hoặc bạn không có quyền sử dụng ví này.'], 404);
+            }
+
+            if ($wallet->type !== 'cash') {
+                return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công chỉ cho phép sử dụng ví Tiền mặt.'], 400);
+            }
+
+            if ($wallet->currency_code !== 'VND') {
+                return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công chỉ hỗ trợ đơn vị tiền tệ VND.'], 400);
+            }
+ 
             $transaction = $this->transactionService->createTransaction($userId, $validated, $request->file('attachment'), $request->file('attachments'));
 
             return response()->json([
@@ -154,6 +167,19 @@ class TransactionController extends Controller
                 'attachments.*'    => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400'
             ]);
 
+            if (isset($validated['wallet_id'])) {
+                $wallet = DB::table('wallets')->where('id', $validated['wallet_id'])->where('user_id', $userId)->first();
+                if (!$wallet) {
+                    return response()->json(['status' => 'error', 'message' => 'Ví không tồn tại hoặc bạn không có quyền sử dụng ví này.'], 404);
+                }
+                if ($wallet->type !== 'cash') {
+                    return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công chỉ cho phép sử dụng ví Tiền mặt.'], 400);
+                }
+                if ($wallet->currency_code !== 'VND') {
+                    return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công chỉ hỗ trợ đơn vị tiền tệ VND.'], 400);
+                }
+            }
+ 
             $transaction = $this->transactionService->updateTransaction($id, $userId, $validated, $request->file('attachment'), $request->file('attachments'));
 
             return response()->json([
