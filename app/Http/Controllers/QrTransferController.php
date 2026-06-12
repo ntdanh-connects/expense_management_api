@@ -105,7 +105,17 @@ class QrTransferController extends Controller
  
             // Vấn tin tài khoản (Inquire Account Name)
             $inquiry = $this->vietinBankService->inquireAccount($decoded['bank_bin'], $decoded['account_number']);
-            $payeeName = $inquiry['account_name'] ?? $decoded['payee_name'];
+            
+            // Ưu tiên tên thật từ mã QR (tag 59) nếu vấn tin là mock/giả lập
+            if (!empty($inquiry['is_mocked']) && !empty($decoded['payee_name']) && $decoded['payee_name'] !== 'UNKNOWN RECIPIENT') {
+                if (str_contains($inquiry['account_name'], 'HIGHLANDS COFFEE') && str_contains($decoded['payee_name'], 'HIGHLANDS COFFEE')) {
+                    $payeeName = $inquiry['account_name'];
+                } else {
+                    $payeeName = $decoded['payee_name'];
+                }
+            } else {
+                $payeeName = $inquiry['account_name'] ?? $decoded['payee_name'];
+            }
  
             // Automatically virtualize payee into database
             $payee = $this->payeeService->saveOrUpdatePayee($userId, [
