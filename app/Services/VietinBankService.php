@@ -64,6 +64,41 @@ class VietinBankService
     }
  
     /**
+     * Tra cứu tên tài khoản qua cổng VietQR.io nếu cấu hình API Key.
+     */
+    public function lookupAccountName(string $bankBin, string $accountNumber): ?string
+    {
+        $clientId = env('VIETQR_CLIENT_ID', '');
+        $apiKey = env('VIETQR_API_KEY', '');
+        
+        if (empty($clientId) || empty($apiKey)) {
+            return null;
+        }
+        
+        try {
+            $response = Http::withHeaders([
+                'x-client-id' => $clientId,
+                'x-api-key' => $apiKey,
+                'Content-Type' => 'application/json',
+            ])->timeout(5)->post('https://api.vietqr.io/v2/lookup', [
+                'bin' => $bankBin,
+                'accountNumber' => $accountNumber,
+            ]);
+            
+            if ($response->successful()) {
+                $body = $response->json();
+                if (isset($body['code']) && $body['code'] === '00' && isset($body['data']['accountName'])) {
+                    return strtoupper($body['data']['accountName']);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error('Failed to lookup account name via VietQR.io: ' . $e->getMessage());
+        }
+        
+        return null;
+    }
+
+    /**
      * Inquire Account Name (Vấn tin tài khoản).
      * Since this is a student project, we mock this API to make it 100% stable,
      * but simulate the API call lifecycle.
@@ -72,7 +107,19 @@ class VietinBankService
     {
         Log::info("Inquiring account name for BIN: {$bankBin}, Account: {$accountNumber}");
  
-        // 1. If we have credentials configured, we could theoretically call the real VietinBank Sandbox API.
+        // 1. Thử tra cứu tên tài khoản thực tế bằng API VietQR.io (nếu có cấu hình API Key)
+        $realName = $this->lookupAccountName($bankBin, $accountNumber);
+        if ($realName) {
+            return [
+                'status' => 'success',
+                'account_name' => $realName,
+                'account_number' => $accountNumber,
+                'bank_bin' => $bankBin,
+                'is_mocked' => false
+            ];
+        }
+
+        // 2. If we have credentials configured, we could theoretically call the real VietinBank Sandbox API.
         // However, to ensure it works out of the box, we check credentials. If empty, we mock immediately.
         if (empty($this->clientId) || empty($this->clientSecret)) {
             return $this->getMockAccountName($bankBin, $accountNumber);
