@@ -193,6 +193,10 @@ class VietinBankService
             $name = 'CONG TY CO PHAN PHUC LONG';
         } elseif (str_contains($accountNumber, '3333')) {
             $name = 'SIEU THI TIEN LOI CIRCLE K';
+        } elseif ($accountNumber === '0393181781') {
+            $name = 'NGO THANH DANH';
+        } elseif ($accountNumber === '108003515919') {
+            $name = 'TRAN NGUYEN ANH THO';
         } else {
             // Generate a realistic Vietnamese name based on checksum
             $names = [
