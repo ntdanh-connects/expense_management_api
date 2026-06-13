@@ -427,6 +427,21 @@ class WalletService {
                 'updated_at'          => now()
             ]);
 
+            // Gửi thông báo nhận tiền P2P cho người thụ hưởng
+            try {
+                $recipient = \App\Models\User::find($toUserId);
+                if ($recipient) {
+                    $recipient->notify(new \App\Notifications\P2pTransferReceivedNotification(
+                        $senderName,
+                        $convertedAmount,
+                        $toCurrency,
+                        $notes
+                    ));
+                }
+            } catch (\Throwable $e) {
+                Log::error("Lỗi khi gửi thông báo chuyển tiền P2P: " . $e->getMessage());
+            }
+
             return [
                 'transfer_id' => $transferId,
                 'expense_id' => $expenseId,
