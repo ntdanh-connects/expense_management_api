@@ -43,7 +43,7 @@ class Transaction extends Model
         'transaction_date' => 'datetime',
     ];
 
-    protected $appends = ['is_transfer_locked'];
+    protected $appends = ['is_transfer_locked', 'sender'];
 
     protected static function booted()
     {
@@ -102,6 +102,33 @@ class Transaction extends Model
             return $fromWallet->user_id === $toWallet->user_id;
         }
         return false;
+    }
+
+    public function getSenderAttribute()
+    {
+        if ($this->type !== 'income' || $this->source_type !== 'transfer' || !$this->source_id) {
+            return null;
+        }
+
+        $transfer = DB::table('wallet_transfers')->where('id', $this->source_id)->first();
+        if (!$transfer) {
+            return null;
+        }
+
+        $expenseTx = DB::table('transactions')->where('id', $transfer->expense_transaction_id)->first();
+        if (!$expenseTx) {
+            return null;
+        }
+
+        $senderUser = DB::table('users')->where('user_id', $expenseTx->user_id)->first();
+        $senderProfile = DB::table('user_profiles')->where('user_id', $expenseTx->user_id)->first();
+        $senderWallet = DB::table('wallets')->where('id', $expenseTx->wallet_id)->first();
+
+        return [
+            'name' => $senderProfile ? $senderProfile->full_name : ($senderUser ? $senderUser->email : 'Người dùng hệ thống'),
+            'wallet_name' => $senderWallet ? $senderWallet->name : null,
+            'identifier' => $senderUser ? $senderUser->identifier : null,
+        ];
     }
 }
 
