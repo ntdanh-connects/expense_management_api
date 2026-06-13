@@ -112,5 +112,7 @@ return [
     'recurring_wallet_no_cash' => 'Recurring transactions are only supported using Bank or E-wallet wallets.',
     'recurring_wallet_vnd_only' => 'Recurring transactions only support VND currency.',
     'qr_recipient_no_valid_wallet' => 'The recipient does not have a valid VND Bank or E-wallet account configured to receive funds.',
+    'qr_transfer_edit_restricted' => 'QR transfers only support editing category, title, notes, and attachments.',
+    'payee_not_found_or_unauthorized' => 'The payee does not exist or does not belong to you.',
 ];
 

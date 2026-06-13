@@ -23,7 +23,7 @@ class RecurringTransactionService
 
     public function getAllRules(string $userId)
     {
-        return RecurringRule::with(['wallet', 'category'])
+        return RecurringRule::with(['wallet', 'category', 'payee'])
             ->where('user_id', $userId)
             ->orderBy('created_at', 'desc')
             ->get();
@@ -31,7 +31,7 @@ class RecurringTransactionService
 
     public function getRuleById(string $id, string $userId)
     {
-        $rule = RecurringRule::with(['wallet', 'category'])->find($id);
+        $rule = RecurringRule::with(['wallet', 'category', 'payee'])->find($id);
 
         if (!$rule || $rule->user_id !== $userId) {
             throw new \Exception(__('messages.recurring_rule_not_found_or_unauthorized'));
@@ -69,12 +69,25 @@ class RecurringTransactionService
             }
         }
 
+        // 2.5. Kiểm tra người hưởng thụ sở hữu
+        if (!empty($data['payee_id'])) {
+            $payeeExists = DB::table('saved_payees')
+                ->where('id', $data['payee_id'])
+                ->where('user_id', $userId)
+                ->exists();
+
+            if (!$payeeExists) {
+                throw new \Exception(__('messages.payee_not_found_or_unauthorized'));
+            }
+        }
+
         // 3. Tạo luật định kỳ
         $nextRun = $data['next_run_at'] ?? now();
         return RecurringRule::create([
             'user_id' => $userId,
             'wallet_id' => $data['wallet_id'],
             'category_id' => $data['category_id'] ?? null,
+            'payee_id' => $data['payee_id'] ?? null,
             'type' => $data['type'],
             'amount' => $data['amount'],
             'title' => $data['title'],
@@ -121,6 +134,20 @@ class RecurringTransactionService
 
             if (!$categoryExists) {
                 throw new \Exception(__('messages.category_not_found_or_unauthorized'));
+            }
+        }
+
+        // Kiểm tra người hưởng thụ mới nếu thay đổi
+        if (isset($data['payee_id']) && $data['payee_id'] !== $rule->payee_id) {
+            if (!empty($data['payee_id'])) {
+                $payeeExists = DB::table('saved_payees')
+                    ->where('id', $data['payee_id'])
+                    ->where('user_id', $userId)
+                    ->exists();
+
+                if (!$payeeExists) {
+                    throw new \Exception(__('messages.payee_not_found_or_unauthorized'));
+                }
             }
         }
 
@@ -261,6 +288,7 @@ class RecurringTransactionService
                             'user_id' => $userId,
                             'wallet_id' => $walletId,
                             'category_id' => $rule->category_id,
+                            'payee_id' => $rule->payee_id,
                             'type' => $type,
                             'status' => 'completed',
                             'amount' => $amount,

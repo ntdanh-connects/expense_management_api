@@ -23,6 +23,22 @@ class Wallet extends Model
         'is_hidden' => 'boolean',
     ];
 
+    /**
+     * Accessor for 'type' attribute to convert 'ewallet' from database to 'e-wallet' for frontend.
+     */
+    public function getTypeAttribute($value)
+    {
+        return $value === 'ewallet' ? 'e-wallet' : $value;
+    }
+
+    /**
+     * Mutator for 'type' attribute to convert 'e-wallet' from frontend to 'ewallet' for database.
+     */
+    public function setTypeAttribute($value)
+    {
+        $this->attributes['type'] = $value === 'e-wallet' ? 'ewallet' : $value;
+    }
+
     protected static function booted()
     {
         static::creating(function ($wallet) {

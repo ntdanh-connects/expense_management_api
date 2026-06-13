@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\RecurringTransactionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class RecurringRuleController extends Controller
 {
@@ -54,6 +55,7 @@ class RecurringRuleController extends Controller
             $validated = $request->validate([
                 'wallet_id'      => 'required|uuid',
                 'category_id'    => 'nullable|uuid',
+                'payee_id'       => 'nullable|uuid',
                 'type'           => 'required|string|in:income,expense',
                 'amount'         => 'required|numeric|min:0.01',
                 'title'          => 'required|string|max:255',
@@ -104,6 +106,7 @@ class RecurringRuleController extends Controller
             $validated = $request->validate([
                 'wallet_id'      => 'sometimes|required|uuid',
                 'category_id'    => 'nullable|uuid',
+                'payee_id'       => 'nullable|uuid',
                 'type'           => 'sometimes|required|string|in:income,expense',
                 'amount'         => 'sometimes|required|numeric|min:0.01',
                 'title'          => 'sometimes|required|string|max:255',

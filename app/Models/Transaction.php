@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class Transaction extends Model
 {
@@ -20,6 +21,7 @@ class Transaction extends Model
         'user_id',
         'wallet_id',
         'category_id',
+        'payee_id',
         'type',
         'status',
         'amount',
@@ -40,6 +42,8 @@ class Transaction extends Model
         'amount_in_user_currency' => 'decimal:2',
         'transaction_date' => 'datetime',
     ];
+
+    protected $appends = ['is_transfer_locked'];
 
     protected static function booted()
     {
@@ -65,6 +69,11 @@ class Transaction extends Model
         return $this->belongsTo(Category::class, 'category_id', 'id');
     }
 
+    public function payee()
+    {
+        return $this->belongsTo(SavedPayee::class, 'payee_id', 'id');
+    }
+
     public function attachments()
     {
         return $this->hasMany(TransactionAttachment::class, 'transaction_id', 'id');
@@ -74,4 +83,25 @@ class Transaction extends Model
     {
         return $this->hasMany(TransactionAudit::class, 'transaction_id', 'id');
     }
+
+    public function getIsTransferLockedAttribute()
+    {
+        if ($this->source_type !== 'transfer') {
+            return false;
+        }
+        if (!$this->source_id) {
+            return false;
+        }
+        $transfer = DB::table('wallet_transfers')->where('id', $this->source_id)->first();
+        if (!$transfer) {
+            return false;
+        }
+        $fromWallet = DB::table('wallets')->where('id', $transfer->from_wallet_id)->first();
+        $toWallet = DB::table('wallets')->where('id', $transfer->to_wallet_id)->first();
+        if ($fromWallet && $toWallet) {
+            return $fromWallet->user_id === $toWallet->user_id;
+        }
+        return false;
+    }
 }
+

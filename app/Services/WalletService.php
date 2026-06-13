@@ -294,9 +294,9 @@ class WalletService {
     /**
      * Chuyển tiền P2P giữa 2 người dùng khác nhau trong hệ thống
      */
-    public function p2pTransfer(string $fromUserId, string $toUserId, string $fromWalletId, string $toWalletId, float $amount, ?string $notes = null, ?string $timezone = null)
+    public function p2pTransfer(string $fromUserId, string $toUserId, string $fromWalletId, string $toWalletId, float $amount, ?string $notes = null, ?string $timezone = null, ?string $payeeId = null)
     {
-        return DB::transaction(function () use ($fromUserId, $toUserId, $fromWalletId, $toWalletId, $amount, $notes, $timezone) {
+        return DB::transaction(function () use ($fromUserId, $toUserId, $fromWalletId, $toWalletId, $amount, $notes, $timezone, $payeeId) {
             if ($fromWalletId === $toWalletId) {
                 throw new \Exception(__('messages.wallets_same'));
             }
@@ -362,6 +362,7 @@ class WalletService {
                 'user_id'                 => $fromUserId,
                 'wallet_id'               => $fromWalletId,
                 'category_id'             => null,
+                'payee_id'                => $payeeId,
                 'type'                    => 'expense',
                 'status'                  => 'completed',
                 'amount'                  => $amount,
@@ -439,9 +440,9 @@ class WalletService {
     /**
      * Chuyển tiền ảo đến tài khoản ngân hàng ngoài (VietQR)
      */
-    public function bankTransfer(string $userId, string $fromWalletId, string $bankCode, string $accountNumber, string $accountName, float $amount, ?string $notes = null, ?string $timezone = null)
+    public function bankTransfer(string $userId, string $fromWalletId, string $bankCode, string $accountNumber, string $accountName, float $amount, ?string $notes = null, ?string $timezone = null, ?string $payeeId = null)
     {
-        return DB::transaction(function () use ($userId, $fromWalletId, $bankCode, $accountNumber, $accountName, $amount, $notes, $timezone) {
+        return DB::transaction(function () use ($userId, $fromWalletId, $bankCode, $accountNumber, $accountName, $amount, $notes, $timezone, $payeeId) {
             if ($amount <= 0) {
                 throw new \Exception(__('messages.amount_must_be_positive'));
             }
@@ -479,6 +480,7 @@ class WalletService {
                 'user_id'                 => $userId,
                 'wallet_id'               => $fromWalletId,
                 'category_id'             => null,
+                'payee_id'                => $payeeId,
                 'type'                    => 'expense',
                 'status'                  => 'completed',
                 'amount'                  => $amount,

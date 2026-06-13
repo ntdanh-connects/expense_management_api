@@ -16,7 +16,7 @@ class WalletRepository extends BaseRepository implements WalletRepositoryInterfa
     // 🔥 Hàm lấy full ví kèm số dư khả dụng thực tế của user
     public function getWalletsByUserId(string $userId)
     {
-        return DB::table('wallets')
+        $wallets = DB::table('wallets')
             ->join('wallet_balances', 'wallets.id', '=', 'wallet_balances.wallet_id')
             ->where('wallets.user_id', $userId)
             ->whereNull('wallets.deleted_at') // Loại bỏ ví đã xóa mềm
@@ -28,6 +28,14 @@ class WalletRepository extends BaseRepository implements WalletRepositoryInterfa
             )
             ->orderBy('wallets.created_at', 'desc')
             ->get();
+
+        foreach ($wallets as $wallet) {
+            if ($wallet->type === 'ewallet') {
+                $wallet->type = 'e-wallet';
+            }
+        }
+
+        return $wallets;
     }
 
     // Khởi tạo dòng số dư ban đầu cho ví mới cứng

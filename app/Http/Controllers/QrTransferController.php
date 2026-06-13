@@ -322,6 +322,19 @@ class QrTransferController extends Controller
                         'message' => __('messages.qr_recipient_no_valid_wallet')
                     ], 400);
                 }
+
+                $recipient = User::where('user_id', $recipientId)->first();
+                if (!$recipient) {
+                    return response()->json(['status' => 'error', 'message' => 'Không tìm thấy người nhận.'], 404);
+                }
+                $payeeName = $recipient->profile ? $recipient->profile->full_name : 'Người dùng hệ thống';
+                
+                $payee = $this->payeeService->saveOrUpdatePayee($userId, [
+                    'payee_type' => 'internal',
+                    'payee_user_id' => $recipientId,
+                    'identifier' => $recipient->identifier,
+                    'payee_name' => $payeeName,
+                ]);
  
                 $result = $this->walletService->p2pTransfer(
                     $userId,
@@ -330,7 +343,8 @@ class QrTransferController extends Controller
                     $recipientWallet->id,
                     $validated['amount'],
                     $validated['notes'],
-                    $validated['timezone'] ?? null
+                    $validated['timezone'] ?? null,
+                    $payee->id
                 );
  
                 return response()->json([
@@ -341,6 +355,18 @@ class QrTransferController extends Controller
             }
  
             if ($validated['payee_type'] === 'external') {
+                // Resolve Bank name
+                $bank = $this->vietinBankService->getBankByBin($validated['bank_code']);
+                $bankName = $bank ? $bank['shortName'] : 'Ngân hàng ngoài';
+
+                $payee = $this->payeeService->saveOrUpdatePayee($userId, [
+                    'payee_type' => 'external',
+                    'identifier' => $validated['account_number'],
+                    'bank_code' => $validated['bank_code'],
+                    'bank_name' => $bankName,
+                    'payee_name' => $validated['payee_name'],
+                ]);
+
                 // Call local bankTransfer to deduct balance and record expense
                 $result = $this->walletService->bankTransfer(
                     $userId,
@@ -350,7 +376,8 @@ class QrTransferController extends Controller
                     $validated['payee_name'],
                     $validated['amount'],
                     $validated['notes'],
-                    $validated['timezone'] ?? null
+                    $validated['timezone'] ?? null,
+                    $payee->id
                 );
  
                 // Call VietinBank Sandbox Service to simulate external bank transfer logging

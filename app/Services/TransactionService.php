@@ -36,7 +36,7 @@ class TransactionService
 
     public function getTransactionById(string $id, string $userId)
     {
-        $transaction = Transaction::with(['category', 'wallet', 'attachments'])->find($id);
+        $transaction = Transaction::with(['category', 'wallet', 'attachments', 'payee'])->find($id);
 
         if (!$transaction || $transaction->user_id !== $userId) {
             throw new \Exception(__('messages.transaction_not_found_or_unauthorized'));
@@ -239,9 +239,22 @@ class TransactionService
                 throw new \Exception(__('messages.transaction_not_found_or_unauthorized'));
             }
 
-            // Ngăn chặn sửa trực tiếp giao dịch chuyển khoản (source_type = 'transfer')
-            if ($transaction->source_type === 'transfer') {
+            // Chặn sửa trực tiếp giao dịch chuyển khoản bị khóa (chuyển khoản nội bộ)
+            if ($transaction->is_transfer_locked) {
                 throw new \Exception(__('messages.cannot_edit_transfer_directly'));
+            }
+
+            // Với giao dịch chuyển khoản bằng QR (P2P hoặc VietQR)
+            if ($transaction->source_type === 'transfer') {
+                // Chỉ cho phép sửa đổi category_id, title, notes, attachments
+                if (
+                    (isset($data['wallet_id']) && $data['wallet_id'] !== $transaction->wallet_id) ||
+                    (isset($data['amount']) && (float)$data['amount'] !== (float)$transaction->amount) ||
+                    (isset($data['type']) && $data['type'] !== $transaction->type) ||
+                    (isset($data['currency_code']) && $data['currency_code'] !== $transaction->currency_code)
+                ) {
+                    throw new \Exception(__('messages.qr_transfer_edit_restricted'));
+                }
             }
 
             $oldData = $transaction->toArray();

@@ -112,5 +112,7 @@ return [
     'recurring_wallet_no_cash' => 'Giao dịch định kỳ chỉ hỗ trợ ví Ngân hàng hoặc Ví điện tử.',
     'recurring_wallet_vnd_only' => 'Giao dịch định kỳ chỉ hỗ trợ đơn vị tiền tệ VND.',
     'qr_recipient_no_valid_wallet' => 'Người thụ hưởng không có tài khoản Ngân hàng hoặc Ví điện tử (VNĐ) hợp lệ để nhận tiền.',
+    'qr_transfer_edit_restricted' => 'Giao dịch chuyển khoản QR chỉ hỗ trợ chỉnh sửa danh mục, tiêu đề, ghi chú và ảnh đính kèm.',
+    'payee_not_found_or_unauthorized' => 'Người thụ hưởng không tồn tại hoặc không thuộc quyền sở hữu của bạn.',
 ];
 

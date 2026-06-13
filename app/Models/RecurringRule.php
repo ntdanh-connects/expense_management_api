@@ -20,6 +20,7 @@ class RecurringRule extends Model
         'user_id',
         'wallet_id',
         'category_id',
+        'payee_id',
         'type',
         'amount',
         'title',
@@ -62,6 +63,11 @@ class RecurringRule extends Model
     public function category()
     {
         return $this->belongsTo(Category::class, 'category_id', 'id');
+    }
+
+    public function payee()
+    {
+        return $this->belongsTo(SavedPayee::class, 'payee_id', 'id');
     }
 
     public function executions()
