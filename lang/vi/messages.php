@@ -111,5 +111,6 @@ return [
     'manual_transaction_vnd_only' => 'Giao dịch thủ công chỉ hỗ trợ đơn vị tiền tệ VND.',
     'recurring_wallet_no_cash' => 'Giao dịch định kỳ chỉ hỗ trợ ví Ngân hàng hoặc Ví điện tử.',
     'recurring_wallet_vnd_only' => 'Giao dịch định kỳ chỉ hỗ trợ đơn vị tiền tệ VND.',
+    'qr_recipient_no_valid_wallet' => 'Người thụ hưởng không có tài khoản Ngân hàng hoặc Ví điện tử (VNĐ) hợp lệ để nhận tiền.',
 ];
 

@@ -111,5 +111,6 @@ return [
     'manual_transaction_vnd_only' => 'Manual transactions only support VND currency.',
     'recurring_wallet_no_cash' => 'Recurring transactions are only supported using Bank or E-wallet wallets.',
     'recurring_wallet_vnd_only' => 'Recurring transactions only support VND currency.',
+    'qr_recipient_no_valid_wallet' => 'The recipient does not have a valid VND Bank or E-wallet account configured to receive funds.',
 ];
 

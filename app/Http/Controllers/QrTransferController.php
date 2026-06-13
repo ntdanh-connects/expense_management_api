@@ -308,16 +308,18 @@ class QrTransferController extends Controller
                     return response()->json(['status' => 'error', 'message' => 'Bạn không thể tự chuyển khoản cho chính mình.'], 400);
                 }
  
-                // Find recipient's first active wallet to receive the virtual transfer
+                // Find recipient's first active wallet to receive the virtual transfer (Must be bank/ewallet in VND)
                 $recipientWallet = DB::table('wallets')
                     ->where('user_id', $recipientId)
+                    ->whereIn('type', ['bank', 'ewallet'])
+                    ->where('currency_code', 'VND')
                     ->whereNull('deleted_at')
                     ->first();
- 
+
                 if (!$recipientWallet) {
                     return response()->json([
                         'status' => 'error',
-                        'message' => 'Người thụ hưởng chưa kích hoạt ví nào trên hệ thống để nhận tiền.'
+                        'message' => __('messages.qr_recipient_no_valid_wallet')
                     ], 400);
                 }
  
