@@ -88,7 +88,8 @@ class TransactionController extends Controller
                 'timezone'         => 'nullable|string|timezone',
                 'attachment'       => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400', // Tối đa 100MB
                 'attachments'      => 'nullable|array',
-                'attachments.*'    => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400'
+                'attachments.*'    => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400',
+                'source_type'      => 'nullable|string|in:manual,recurring,transfer,adjustment,import'
             ]);
 
             $wallet = DB::table('wallets')->where('id', $validated['wallet_id'])->where('user_id', $userId)->first();
@@ -96,8 +97,11 @@ class TransactionController extends Controller
                 return response()->json(['status' => 'error', 'message' => __('messages.wallet_not_found_or_unauthorized')], 404);
             }
 
-            if ($wallet->type !== 'cash') {
-                return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_cash_only')], 400);
+            $sourceType = $validated['source_type'] ?? 'manual';
+            if ($sourceType === 'manual' && $wallet->type !== 'cash') {
+                if (empty($validated['payee_id'])) {
+                    return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công qua ví ngân hàng hoặc ví điện tử bắt buộc phải có người hưởng thụ.'], 400);
+                }
             }
 
             if ($wallet->currency_code !== 'VND') {
@@ -155,6 +159,7 @@ class TransactionController extends Controller
             $validated = $request->validate([
                 'wallet_id'        => 'sometimes|required|uuid',
                 'category_id'      => 'nullable|uuid',
+                'payee_id'         => 'nullable|uuid|exists:saved_payees,id',
                 'type'             => 'sometimes|required|string|in:income,expense',
                 'amount'           => 'sometimes|required|numeric|min:0.01',
                 'title'            => 'sometimes|required|string|max:255',
@@ -165,7 +170,8 @@ class TransactionController extends Controller
                 'timezone'         => 'nullable|string|timezone',
                 'attachment'       => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400',
                 'attachments'      => 'nullable|array',
-                'attachments.*'    => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400'
+                'attachments.*'    => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400',
+                'source_type'      => 'nullable|string|in:manual,recurring,transfer,adjustment,import'
             ]);
 
             if (isset($validated['wallet_id'])) {
@@ -173,9 +179,15 @@ class TransactionController extends Controller
                 if (!$wallet) {
                     return response()->json(['status' => 'error', 'message' => __('messages.wallet_not_found_or_unauthorized')], 404);
                 }
-                if ($wallet->type !== 'cash') {
-                    return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_cash_only')], 400);
+                
+                $sourceType = $validated['source_type'] ?? DB::table('transactions')->where('id', $id)->value('source_type') ?? 'manual';
+                if ($sourceType === 'manual' && $wallet->type !== 'cash') {
+                    $payeeId = $validated['payee_id'] ?? DB::table('transactions')->where('id', $id)->value('payee_id');
+                    if (empty($payeeId)) {
+                        return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công qua ví ngân hàng hoặc ví điện tử bắt buộc phải có người hưởng thụ.'], 400);
+                    }
                 }
+                
                 if ($wallet->currency_code !== 'VND') {
                     return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_vnd_only')], 400);
                 }
