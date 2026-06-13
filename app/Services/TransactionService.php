@@ -153,12 +153,13 @@ class TransactionService
                 $newBalance = bcadd($walletBalance->available_balance, $appliedAmount, 2);
             }
 
-            // 4. Tạo giao dịch
+            // Tạo giao dịch
             $transaction = Transaction::create([
                 'id' => $transactionId,
                 'user_id' => $userId,
                 'wallet_id' => $walletId,
                 'category_id' => $categoryId,
+                'payee_id' => $data['payee_id'] ?? null,
                 'type' => $type,
                 'status' => $data['status'] ?? 'completed',
                 'amount' => $amount,
