@@ -54,22 +54,32 @@ class DashboardController extends Controller
             // 2. Lấy danh sách ví và số dư (Không cache hoặc cache rất ngắn để hiển thị cấu hình ví/số dư thay đổi tức thời)
             $wallets = $this->walletService->getAllUserWallets($userId);
             // Đảm bảo wallets luôn là mảng phẳng khi trả về
-            $walletsArray = $wallets instanceof \Illuminate\Support\Collection ? $wallets->values()->toArray() : $wallets;
+            $walletsArray = $wallets instanceof \Illuminate\Support\Collection 
+                ? $wallets->values()->toArray() 
+                : (is_array($wallets) ? array_values($wallets) : []);
 
             // 3. Lấy tình hình ngân sách tháng hiện tại (Cache theo version + month + year)
             $budgetsCacheKey = "user_{$userId}_budgets_v{$version}_{$month}_{$year}";
-            $budgetsArray = Cache::remember($budgetsCacheKey, 3600, function () use ($userId, $month, $year) {
+            $budgetsData = Cache::remember($budgetsCacheKey, 3600, function () use ($userId, $month, $year) {
                 $budgets = $this->budgetService->getAllUserBudgets($userId, $month, $year);
                 return $budgets instanceof \Illuminate\Support\Collection ? $budgets->values()->toArray() : $budgets;
             });
+            // Đảm bảo budgetsArray luôn là mảng phẳng khi trả về (an toàn trước cache cũ)
+            $budgetsArray = $budgetsData instanceof \Illuminate\Support\Collection 
+                ? $budgetsData->values()->toArray() 
+                : (is_array($budgetsData) ? array_values($budgetsData) : []);
 
             // 4. Lấy 10 giao dịch gần đây nhất (Cache theo version)
             $txCacheKey = "user_{$userId}_recent_txs_v{$version}";
-            $recentTransactionsArray = Cache::remember($txCacheKey, 3600, function () use ($userId) {
+            $recentTransactionsData = Cache::remember($txCacheKey, 3600, function () use ($userId) {
                 $recentTransactionsPaginator = $this->transactionService->getTransactions($userId, [], 'date', 'desc', 10);
                 $items = $recentTransactionsPaginator->items();
                 return collect($items)->values()->toArray();
             });
+            // Đảm bảo recentTransactionsArray luôn là mảng phẳng khi trả về
+            $recentTransactionsArray = $recentTransactionsData instanceof \Illuminate\Support\Collection 
+                ? $recentTransactionsData->values()->toArray() 
+                : (is_array($recentTransactionsData) ? array_values($recentTransactionsData) : []);
 
             // 5. Đếm số lượng thông báo chưa đọc (Không cache để hiển thị badge số lượng thông báo realtime khi có push notification)
             $unreadNotificationsCount = DB::table('notifications')
