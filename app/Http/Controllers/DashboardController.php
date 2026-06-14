@@ -57,9 +57,14 @@ class DashboardController extends Controller
             $walletsArray = $wallets instanceof \Illuminate\Support\Collection 
                 ? $wallets->values()->toArray() 
                 : (is_array($wallets) ? array_values($wallets) : []);
+            // Lọc phòng vệ loại bỏ ví thiếu id
+            $walletsArray = array_values(array_filter($walletsArray, function ($w) {
+                return is_array($w) && isset($w['id']) && !is_null($w['id']);
+            }));
 
             // 3. Lấy tình hình ngân sách tháng hiện tại (Cache theo version + month + year)
-            $budgetsCacheKey = "user_{$userId}_budgets_v{$version}_{$month}_{$year}";
+            // Đổi cache key sang v3 để vô hiệu hoá triệt để cache cũ trên Production
+            $budgetsCacheKey = "user_{$userId}_budgets_v3_{$version}_{$month}_{$year}";
             $budgetsData = Cache::remember($budgetsCacheKey, 3600, function () use ($userId, $month, $year) {
                 $budgets = $this->budgetService->getAllUserBudgets($userId, $month, $year);
                 return $budgets instanceof \Illuminate\Support\Collection ? $budgets->values()->toArray() : $budgets;
@@ -68,9 +73,14 @@ class DashboardController extends Controller
             $budgetsArray = $budgetsData instanceof \Illuminate\Support\Collection 
                 ? $budgetsData->values()->toArray() 
                 : (is_array($budgetsData) ? array_values($budgetsData) : []);
+            // Lọc phòng vệ loại bỏ ngân sách thiếu id
+            $budgetsArray = array_values(array_filter($budgetsArray, function ($b) {
+                return is_array($b) && isset($b['id']) && !is_null($b['id']);
+            }));
 
             // 4. Lấy 10 giao dịch gần đây nhất (Cache theo version)
-            $txCacheKey = "user_{$userId}_recent_txs_v{$version}";
+            // Đổi cache key sang v3 để vô hiệu hoá triệt để cache cũ trên Production
+            $txCacheKey = "user_{$userId}_recent_txs_v3_{$version}";
             $recentTransactionsData = Cache::remember($txCacheKey, 3600, function () use ($userId) {
                 $recentTransactionsPaginator = $this->transactionService->getTransactions($userId, [], 'date', 'desc', 10);
                 $items = $recentTransactionsPaginator->items();
@@ -80,6 +90,10 @@ class DashboardController extends Controller
             $recentTransactionsArray = $recentTransactionsData instanceof \Illuminate\Support\Collection 
                 ? $recentTransactionsData->values()->toArray() 
                 : (is_array($recentTransactionsData) ? array_values($recentTransactionsData) : []);
+            // Lọc phòng vệ loại bỏ giao dịch thiếu id
+            $recentTransactionsArray = array_values(array_filter($recentTransactionsArray, function ($t) {
+                return is_array($t) && isset($t['id']) && !is_null($t['id']);
+            }));
 
             // 5. Đếm số lượng thông báo chưa đọc (Không cache để hiển thị badge số lượng thông báo realtime khi có push notification)
             $unreadNotificationsCount = DB::table('notifications')
@@ -88,7 +102,8 @@ class DashboardController extends Controller
                 ->count();
 
             // 6. Tính toán tóm tắt thu chi (income, expense, net) trong tháng hiện tại (Cache theo version)
-            $summaryCacheKey = "user_{$userId}_dashboard_sum_v{$version}_{$month}_{$year}";
+            // Đổi cache key sang v3 để tránh xung đột với cache cũ
+            $summaryCacheKey = "user_{$userId}_dashboard_sum_v3_{$month}_{$year}";
             $summary = Cache::remember($summaryCacheKey, 3600, function () use ($userId, $startDate, $endDate) {
                 $query = DB::table('transactions')
                     ->where('user_id', $userId)
