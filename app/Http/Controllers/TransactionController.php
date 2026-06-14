@@ -98,13 +98,13 @@ class TransactionController extends Controller
             }
 
             $sourceType = $validated['source_type'] ?? 'manual';
-            if ($sourceType === 'manual' && $wallet->type !== 'cash') {
+            if (in_array($sourceType, ['manual', 'transfer']) && $wallet->type !== 'cash') {
                 if (empty($validated['payee_id'])) {
                     return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công qua ví ngân hàng hoặc ví điện tử bắt buộc phải có người hưởng thụ.'], 400);
                 }
             }
 
-            if ($sourceType === 'manual' && in_array($wallet->type, ['bank', 'ewallet'])) {
+            if (in_array($sourceType, ['manual', 'transfer']) && in_array($wallet->type, ['bank', 'ewallet'])) {
                 if (!empty($validated['category_id'])) {
                     $category = DB::table('categories')->where('id', $validated['category_id'])->first();
                     if ($category && $category->type === 'income') {
@@ -195,14 +195,14 @@ class TransactionController extends Controller
             }
 
             $sourceType = $validated['source_type'] ?? $existingTx->source_type ?? 'manual';
-            if ($sourceType === 'manual' && $wallet->type !== 'cash') {
+            if (in_array($sourceType, ['manual', 'transfer']) && $wallet->type !== 'cash') {
                 $payeeId = $validated['payee_id'] ?? $existingTx->payee_id;
                 if (empty($payeeId)) {
                     return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công qua ví ngân hàng hoặc ví điện tử bắt buộc phải có người hưởng thụ.'], 400);
                 }
             }
 
-            if ($sourceType === 'manual' && in_array($wallet->type, ['bank', 'ewallet'])) {
+            if (in_array($sourceType, ['manual', 'transfer']) && in_array($wallet->type, ['bank', 'ewallet'])) {
                 $categoryId = array_key_exists('category_id', $validated) ? $validated['category_id'] : $existingTx->category_id;
                 if (!empty($categoryId)) {
                     $category = DB::table('categories')->where('id', $categoryId)->first();

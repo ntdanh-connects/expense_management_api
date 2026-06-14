@@ -158,7 +158,7 @@ class TransactionService
             $recipientWallet = null;
             $payee = null;
             $sourceType = $data['source_type'] ?? 'manual';
-            if ($sourceType === 'manual' && $type === 'expense' && in_array($wallet->type, ['bank', 'ewallet'])) {
+            if (in_array($sourceType, ['manual', 'transfer']) && $type === 'expense' && in_array($wallet->type, ['bank', 'ewallet'])) {
                 if (!empty($data['payee_id'])) {
                     $payee = DB::table('saved_payees')
                         ->where('id', $data['payee_id'])
