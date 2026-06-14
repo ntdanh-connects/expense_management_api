@@ -69,6 +69,7 @@ Route::middleware(['custom.auth'])->group(function () {
     Route::post('/wallets/{id}', [WalletController::class, 'update']);
     Route::delete('/wallets/{id}', [WalletController::class, 'destroy']);
     Route::get('/wallets/{id}/transactions', [WalletController::class, 'transactions']);
+    Route::post('/wallets/{id}/set-default-receiving', [WalletController::class, 'setDefaultReceiving']);
 
     // Categories routes
     Route::get('/categories', [CategoryController::class, 'index']);

@@ -225,4 +225,52 @@ class WalletController extends Controller {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 400);
         }
     }
+
+    //API 8: POST /api/wallets/{id}/set-default-receiving (Đặt ví nhận tiền mặc định)
+    public function setDefaultReceiving(Request $request, $id)
+    {
+        try {
+            $userId = $request->attributes->get('user_id');
+
+            if (!$userId) {
+                return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
+            }
+
+            // Kiểm tra ví tồn tại và thuộc quyền sở hữu của user
+            $wallet = \Illuminate\Support\Facades\DB::table('wallets')
+                ->where('id', $id)
+                ->where('user_id', $userId)
+                ->whereNull('deleted_at')
+                ->first();
+
+            if (!$wallet) {
+                return response()->json(['status' => 'error', 'message' => __('messages.wallet_not_found_or_unauthorized')], 404);
+            }
+
+            // Chỉ cho phép đặt mặc định cho ví Ngân hàng hoặc Ví điện tử
+            if (!in_array($wallet->type, ['bank', 'ewallet'])) {
+                return response()->json(['status' => 'error', 'message' => 'Chỉ được phép đặt ví mặc định nhận tiền cho ví Ngân hàng hoặc Ví điện tử.'], 400);
+            }
+
+            \Illuminate\Support\Facades\DB::transaction(function () use ($userId, $id) {
+                // Đặt tất cả các ví khác của user này về false
+                \Illuminate\Support\Facades\DB::table('wallets')
+                    ->where('user_id', $userId)
+                    ->update(['is_default_receiving' => false]);
+
+                // Đặt ví này thành true
+                \Illuminate\Support\Facades\DB::table('wallets')
+                    ->where('id', $id)
+                    ->update(['is_default_receiving' => true]);
+            });
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Đặt ví nhận tiền mặc định thành công!'
+            ], 200);
+
+        } catch (\Throwable $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 400);
+        }
+    }
 }

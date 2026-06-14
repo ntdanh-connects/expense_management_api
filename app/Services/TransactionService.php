@@ -153,7 +153,49 @@ class TransactionService
                 $newBalance = bcadd($walletBalance->available_balance, $appliedAmount, 2);
             }
 
-            // Tạo giao dịch
+            // MỚI: Kiểm tra chuyển khoản nội bộ qua giao dịch thủ công
+            $isP2P = false;
+            $recipientWallet = null;
+            $payee = null;
+            $sourceType = $data['source_type'] ?? 'manual';
+            if ($sourceType === 'manual' && $type === 'expense' && in_array($wallet->type, ['bank', 'ewallet'])) {
+                if (!empty($data['payee_id'])) {
+                    $payee = DB::table('saved_payees')
+                        ->where('id', $data['payee_id'])
+                        ->where('user_id', $userId)
+                        ->first();
+                    if ($payee && $payee->payee_type === 'internal' && !empty($payee->payee_user_id)) {
+                        $isP2P = true;
+                        
+                        // Find recipient's default bank/ewallet wallet in VND first
+                        $recipientWallet = DB::table('wallets')
+                            ->where('user_id', $payee->payee_user_id)
+                            ->whereIn('type', ['bank', 'ewallet'])
+                            ->where('currency_code', 'VND')
+                            ->where('is_default_receiving', true)
+                            ->whereNull('deleted_at')
+                            ->first();
+
+                        if (!$recipientWallet) {
+                            // Fall back to recipient's first active bank/ewallet wallet in VND
+                            $recipientWallet = DB::table('wallets')
+                                ->where('user_id', $payee->payee_user_id)
+                                ->whereIn('type', ['bank', 'ewallet'])
+                                ->where('currency_code', 'VND')
+                                ->whereNull('deleted_at')
+                                ->first();
+                        }
+
+                        if (!$recipientWallet) {
+                            throw new \Exception(__('messages.qr_recipient_no_valid_wallet'));
+                        }
+                    }
+                }
+            }
+
+            $transferId = $isP2P ? (string) Str::uuid7() : null;
+
+            // Tạo giao dịch người gửi (sender transaction)
             $transaction = Transaction::create([
                 'id' => $transactionId,
                 'user_id' => $userId,
@@ -170,16 +212,105 @@ class TransactionService
                 'notes' => $data['notes'] ?? null,
                 'timezone' => $timezone,
                 'transaction_date' => $data['transaction_date'] ?? now(),
-                'source_type' => $data['source_type'] ?? 'manual',
-                'source_id' => $data['source_id'] ?? null
+                'source_type' => $isP2P ? 'transfer' : ($data['source_type'] ?? 'manual'),
+                'source_id' => $isP2P ? $transferId : ($data['source_id'] ?? null)
             ]);
 
-            // Cập nhật số dư ví
+            // Cập nhật số dư ví người gửi
             DB::table('wallet_balances')->where('wallet_id', $walletId)->update([
                 'available_balance' => $newBalance,
                 'last_transaction_id' => $transactionId,
                 'updated_at' => now()
             ]);
+
+            if ($isP2P) {
+                $recipientTransactionId = (string) Str::uuid7();
+
+                $recipientCurrency = $recipientWallet->currency_code ?? 'VND';
+                $rateToRecipient = $this->exchangeRateService->getRate($txCurrency, $recipientCurrency);
+                $recipientAmount = (float) bcmul((string)$amount, sprintf('%.6f', $rateToRecipient), 4);
+
+                // Lock recipient balance
+                $recipientBalance = DB::table('wallet_balances')
+                    ->where('wallet_id', $recipientWallet->id)
+                    ->lockForUpdate()
+                    ->first();
+                if (!$recipientBalance) {
+                    throw new \Exception("Không tìm thấy thông tin số dư ví người nhận.");
+                }
+                $newRecipientBalance = bcadd($recipientBalance->available_balance, $recipientAmount, 2);
+                // Recipient amount in user currency
+                $recipientUserCurrency = DB::table('user_preferences')->where('user_id', $payee->payee_user_id)->value('currency') ?? 'VND';
+                if ($recipientCurrency === $recipientUserCurrency) {
+                    $recipientAmountInUserCurrency = $recipientAmount;
+                } else {
+                    $rateToRecipientUser = $this->exchangeRateService->getRate($recipientCurrency, $recipientUserCurrency);
+                    $recipientAmountInUserCurrency = (float) bcmul((string)$recipientAmount, sprintf('%.6f', $rateToRecipientUser), 4);
+                }
+
+                $senderProfile = DB::table('user_profiles')->where('user_id', $userId)->first();
+                $senderName = $senderProfile ? $senderProfile->full_name : 'Người gửi';
+
+                // Create recipient transaction
+                Transaction::create([
+                    'id' => $recipientTransactionId,
+                    'user_id' => $payee->payee_user_id,
+                    'wallet_id' => $recipientWallet->id,
+                    'category_id' => null,
+                    'payee_id' => null,
+                    'type' => 'income',
+                    'status' => 'completed',
+                    'amount' => $recipientAmount,
+                    'currency_code' => $recipientCurrency,
+                    'exchange_rate' => $rateToRecipient,
+                    'amount_in_user_currency' => $recipientAmountInUserCurrency,
+                    'title' => "Nhận tiền từ {$senderName}",
+                    'notes' => $data['notes'] ?? null,
+                    'timezone' => DB::table('user_preferences')->where('user_id', $payee->payee_user_id)->value('timezone') ?? 'Asia/Ho_Chi_Minh',
+                    'transaction_date' => $data['transaction_date'] ?? now(),
+                    'source_type' => 'transfer',
+                    'source_id' => $transferId
+                ]);
+
+                // Update recipient balance
+                DB::table('wallet_balances')->where('wallet_id', $recipientWallet->id)->update([
+                    'available_balance' => $newRecipientBalance,
+                    'last_transaction_id' => $recipientTransactionId,
+                    'updated_at' => now()
+                ]);
+
+                // Create wallet transfer record
+                DB::table('wallet_transfers')->insert([
+                    'id' => $transferId,
+                    'from_wallet_id' => $walletId,
+                    'to_wallet_id' => $recipientWallet->id,
+                    'amount' => $amount,
+                    'expense_transaction_id' => $transactionId,
+                    'income_transaction_id' => $recipientTransactionId,
+                    'transferred_at' => now(),
+                    'timezone' => $timezone,
+                    'created_at' => now()
+                ]);
+            }
+
+            // Gửi thông báo chuyển khoản P2P
+            if ($isP2P) {
+                try {
+                    $recipientUser = \App\Models\User::find($payee->payee_user_id);
+                    if ($recipientUser) {
+                        $senderProfile = DB::table('user_profiles')->where('user_id', $userId)->first();
+                        $senderName = $senderProfile ? $senderProfile->full_name : 'Người gửi';
+                        $recipientUser->notify(new \App\Notifications\P2pTransferReceivedNotification(
+                            $senderName,
+                            $recipientAmount,
+                            $recipientCurrency,
+                            $data['notes'] ?? null
+                        ));
+                    }
+                } catch (\Throwable $e) {
+                    Log::error("Lỗi khi gửi thông báo chuyển tiền P2P: " . $e->getMessage());
+                }
+            }
 
             // 5. Xử lý đính kèm nếu có
             $filesToUpload = [];

@@ -87,6 +87,7 @@ class QrTransferController extends Controller
                     'payee_id' => $payee->id,
                     'type' => 'internal',
                     'payee_user_id' => $recipient->user_id,
+                    'to_wallet_id' => $decoded['wallet_id'] ?? null,
                     'identifier' => $decoded['identifier'],
                     'payee_name' => $payeeName,
                     'avatar_url' => $recipient->profile ? $recipient->profile->avatar_url : null,
@@ -199,6 +200,7 @@ class QrTransferController extends Controller
         $internalPayload = json_encode([
             'type' => 'internal',
             'identifier' => $user->identifier,
+            'wallet_id' => $walletId,
             'amount' => $amount,
             'description' => $description
         ]);
@@ -279,6 +281,7 @@ class QrTransferController extends Controller
             'timezone' => 'nullable|string|timezone',
             // Fields required for internal P2P
             'payee_user_id' => 'required_if:payee_type,internal|uuid',
+            'to_wallet_id' => 'nullable|uuid',
             // Fields required for external VietQR
             'bank_code' => 'required_if:payee_type,external|string',
             'account_number' => 'required_if:payee_type,external|string',
@@ -308,13 +311,34 @@ class QrTransferController extends Controller
                     return response()->json(['status' => 'error', 'message' => 'Bạn không thể tự chuyển khoản cho chính mình.'], 400);
                 }
  
-                // Find recipient's first active wallet to receive the virtual transfer (Must be bank/ewallet in VND)
-                $recipientWallet = DB::table('wallets')
-                    ->where('user_id', $recipientId)
-                    ->whereIn('type', ['bank', 'ewallet'])
-                    ->where('currency_code', 'VND')
-                    ->whereNull('deleted_at')
-                    ->first();
+                // Find recipient's specific, default, or first active wallet to receive the virtual transfer (Must be bank/ewallet in VND)
+                $recipientWallet = null;
+                if (!empty($validated['to_wallet_id'])) {
+                    $recipientWallet = DB::table('wallets')
+                        ->where('id', $validated['to_wallet_id'])
+                        ->where('user_id', $recipientId)
+                        ->whereNull('deleted_at')
+                        ->first();
+                }
+
+                if (!$recipientWallet) {
+                    $recipientWallet = DB::table('wallets')
+                        ->where('user_id', $recipientId)
+                        ->whereIn('type', ['bank', 'ewallet'])
+                        ->where('currency_code', 'VND')
+                        ->where('is_default_receiving', true)
+                        ->whereNull('deleted_at')
+                        ->first();
+                }
+
+                if (!$recipientWallet) {
+                    $recipientWallet = DB::table('wallets')
+                        ->where('user_id', $recipientId)
+                        ->whereIn('type', ['bank', 'ewallet'])
+                        ->where('currency_code', 'VND')
+                        ->whereNull('deleted_at')
+                        ->first();
+                }
 
                 if (!$recipientWallet) {
                     return response()->json([
