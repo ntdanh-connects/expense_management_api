@@ -31,7 +31,20 @@ class RecurringTransactionExecutedNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        return ['mail', CustomDbChannel::class, \App\Channels\FcmChannel::class];
+        $channels = [CustomDbChannel::class];
+
+        $preference = $notifiable->notificationPreference;
+        $emailEnabled = $preference ? $preference->email_enabled : true;
+        $pushEnabled = $preference ? $preference->push_enabled : true;
+
+        if ($emailEnabled) {
+            $channels[] = 'mail';
+        }
+        if ($pushEnabled) {
+            $channels[] = \App\Channels\FcmChannel::class;
+        }
+
+        return $channels;
     }
 
     /**

@@ -27,8 +27,20 @@ class BudgetWarningNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        // Gửi cả email, lưu vào database cho in-app notifications (Module 8) và bắn FCM push notification
-        return ['mail', \App\Channels\CustomDbChannel::class, \App\Channels\FcmChannel::class];
+        $channels = [\App\Channels\CustomDbChannel::class];
+
+        $preference = $notifiable->notificationPreference;
+        $emailEnabled = $preference ? $preference->email_enabled : true;
+        $pushEnabled = $preference ? $preference->push_enabled : true;
+
+        if ($emailEnabled) {
+            $channels[] = 'mail';
+        }
+        if ($pushEnabled) {
+            $channels[] = \App\Channels\FcmChannel::class;
+        }
+
+        return $channels;
     }
 
     /**

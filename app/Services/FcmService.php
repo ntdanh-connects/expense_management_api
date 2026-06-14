@@ -85,6 +85,28 @@ class FcmService
                             'title' => $title,
                             'body' => $body,
                         ],
+                        'android' => [
+                            'priority' => 'high',
+                            'notification' => [
+                                'channel_id' => 'expense_management_channel_v4',
+                                'sound' => 'default',
+                            ],
+                        ],
+                        'apns' => [
+                            'headers' => [
+                                'apns-priority' => '10',
+                            ],
+                            'payload' => [
+                                'aps' => [
+                                    'alert' => [
+                                        'title' => $title,
+                                        'body' => $body,
+                                    ],
+                                    'sound' => 'default',
+                                    'badge' => 1,
+                                ],
+                            ],
+                        ],
                     ]
                 ];
 
