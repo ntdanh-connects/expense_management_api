@@ -53,18 +53,22 @@ class DashboardController extends Controller
 
             // 2. Lấy danh sách ví và số dư (Không cache hoặc cache rất ngắn để hiển thị cấu hình ví/số dư thay đổi tức thời)
             $wallets = $this->walletService->getAllUserWallets($userId);
+            // Đảm bảo wallets luôn là mảng phẳng khi trả về
+            $walletsArray = $wallets instanceof \Illuminate\Support\Collection ? $wallets->values()->toArray() : $wallets;
 
             // 3. Lấy tình hình ngân sách tháng hiện tại (Cache theo version + month + year)
             $budgetsCacheKey = "user_{$userId}_budgets_v{$version}_{$month}_{$year}";
-            $budgets = Cache::remember($budgetsCacheKey, 3600, function () use ($userId, $month, $year) {
-                return $this->budgetService->getAllUserBudgets($userId, $month, $year);
+            $budgetsArray = Cache::remember($budgetsCacheKey, 3600, function () use ($userId, $month, $year) {
+                $budgets = $this->budgetService->getAllUserBudgets($userId, $month, $year);
+                return $budgets instanceof \Illuminate\Support\Collection ? $budgets->values()->toArray() : $budgets;
             });
 
             // 4. Lấy 10 giao dịch gần đây nhất (Cache theo version)
             $txCacheKey = "user_{$userId}_recent_txs_v{$version}";
-            $recentTransactions = Cache::remember($txCacheKey, 3600, function () use ($userId) {
+            $recentTransactionsArray = Cache::remember($txCacheKey, 3600, function () use ($userId) {
                 $recentTransactionsPaginator = $this->transactionService->getTransactions($userId, [], 'date', 'desc', 10);
-                return $recentTransactionsPaginator->items();
+                $items = $recentTransactionsPaginator->items();
+                return collect($items)->values()->toArray();
             });
 
             // 5. Đếm số lượng thông báo chưa đọc (Không cache để hiển thị badge số lượng thông báo realtime khi có push notification)
@@ -121,9 +125,9 @@ class DashboardController extends Controller
                 'status'  => 'success',
                 'message' => 'Lấy dữ liệu tổng hợp Dashboard thành công!',
                 'data'    => [
-                    'wallets'                     => $wallets,
-                    'current_month_budgets'       => $budgets,
-                    'recent_transactions'         => $recentTransactions,
+                    'wallets'                     => $walletsArray,
+                    'current_month_budgets'       => $budgetsArray,
+                    'recent_transactions'         => $recentTransactionsArray,
                     'unread_notifications_count'  => $unreadNotificationsCount,
                     'summary'                     => $summary
                 ]
