@@ -29,14 +29,16 @@ class TransactionRepository extends BaseRepository implements TransactionReposit
         }
 
         // 2. Lọc theo khoảng thời gian (start_date, end_date)
-        $userTimezone = DB::table('user_preferences')->where('user_id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
-        if (!empty($filters['start_date'])) {
-            $startDate = \Carbon\Carbon::parse($filters['start_date'], $userTimezone)->startOfDay()->setTimezone('UTC');
-            $query->where('transactions.transaction_date', '>=', $startDate);
-        }
-        if (!empty($filters['end_date'])) {
-            $endDate = \Carbon\Carbon::parse($filters['end_date'], $userTimezone)->endOfDay()->setTimezone('UTC');
-            $query->where('transactions.transaction_date', '<=', $endDate);
+        if (!empty($filters['start_date']) || !empty($filters['end_date'])) {
+            $userTimezone = DB::table('user_preferences')->where('user_id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
+            if (!empty($filters['start_date'])) {
+                $startDate = \Carbon\Carbon::parse($filters['start_date'], $userTimezone)->startOfDay()->setTimezone('UTC');
+                $query->where('transactions.transaction_date', '>=', $startDate);
+            }
+            if (!empty($filters['end_date'])) {
+                $endDate = \Carbon\Carbon::parse($filters['end_date'], $userTimezone)->endOfDay()->setTimezone('UTC');
+                $query->where('transactions.transaction_date', '<=', $endDate);
+            }
         }
 
         // 3. Lọc theo danh mục (category_id)
