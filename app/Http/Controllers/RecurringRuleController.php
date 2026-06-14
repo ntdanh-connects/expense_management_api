@@ -78,6 +78,15 @@ class RecurringRuleController extends Controller
             if ($wallet->currency_code !== 'VND') {
                 return response()->json(['status' => 'error', 'message' => __('messages.recurring_wallet_vnd_only')], 400);
             }
+
+            if (in_array($wallet->type, ['bank', 'ewallet'])) {
+                if (!empty($validated['category_id'])) {
+                    $category = DB::table('categories')->where('id', $validated['category_id'])->first();
+                    if ($category && $category->type === 'income') {
+                        return response()->json(['status' => 'error', 'message' => __('messages.recurring_rule_no_income_category')], 400);
+                    }
+                }
+            }
  
             $rule = $this->recurringService->createRule($userId, $validated);
 
@@ -117,16 +126,32 @@ class RecurringRuleController extends Controller
                 'is_active'      => 'sometimes|required|boolean'
             ]);
 
-            if (isset($validated['wallet_id'])) {
-                $wallet = DB::table('wallets')->where('id', $validated['wallet_id'])->where('user_id', $userId)->first();
-                if (!$wallet) {
-                    return response()->json(['status' => 'error', 'message' => __('messages.wallet_not_found_or_unauthorized')], 404);
-                }
-                if ($wallet->type === 'cash') {
-                    return response()->json(['status' => 'error', 'message' => __('messages.recurring_wallet_no_cash')], 400);
-                }
-                if ($wallet->currency_code !== 'VND') {
-                    return response()->json(['status' => 'error', 'message' => __('messages.recurring_wallet_vnd_only')], 400);
+            $existingRule = DB::table('recurring_rules')->where('id', $id)->where('user_id', $userId)->first();
+            if (!$existingRule) {
+                return response()->json(['status' => 'error', 'message' => __('messages.recurring_rule_not_found_or_unauthorized')], 404);
+            }
+
+            $walletId = $validated['wallet_id'] ?? $existingRule->wallet_id;
+            $wallet = DB::table('wallets')->where('id', $walletId)->where('user_id', $userId)->first();
+            if (!$wallet) {
+                return response()->json(['status' => 'error', 'message' => __('messages.wallet_not_found_or_unauthorized')], 404);
+            }
+
+            if ($wallet->type === 'cash') {
+                return response()->json(['status' => 'error', 'message' => __('messages.recurring_wallet_no_cash')], 400);
+            }
+
+            if ($wallet->currency_code !== 'VND') {
+                return response()->json(['status' => 'error', 'message' => __('messages.recurring_wallet_vnd_only')], 400);
+            }
+
+            if (in_array($wallet->type, ['bank', 'ewallet'])) {
+                $categoryId = array_key_exists('category_id', $validated) ? $validated['category_id'] : $existingRule->category_id;
+                if (!empty($categoryId)) {
+                    $category = DB::table('categories')->where('id', $categoryId)->first();
+                    if ($category && $category->type === 'income') {
+                        return response()->json(['status' => 'error', 'message' => __('messages.recurring_rule_no_income_category')], 400);
+                    }
                 }
             }
  

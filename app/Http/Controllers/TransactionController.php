@@ -104,6 +104,15 @@ class TransactionController extends Controller
                 }
             }
 
+            if ($sourceType === 'manual' && in_array($wallet->type, ['bank', 'ewallet'])) {
+                if (!empty($validated['category_id'])) {
+                    $category = DB::table('categories')->where('id', $validated['category_id'])->first();
+                    if ($category && $category->type === 'income') {
+                        return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_no_income_category')], 400);
+                    }
+                }
+            }
+
             if ($wallet->currency_code !== 'VND') {
                 return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_vnd_only')], 400);
             }
@@ -174,23 +183,37 @@ class TransactionController extends Controller
                 'source_type'      => 'nullable|string|in:manual,recurring,transfer,adjustment,import'
             ]);
 
-            if (isset($validated['wallet_id'])) {
-                $wallet = DB::table('wallets')->where('id', $validated['wallet_id'])->where('user_id', $userId)->first();
-                if (!$wallet) {
-                    return response()->json(['status' => 'error', 'message' => __('messages.wallet_not_found_or_unauthorized')], 404);
+            $existingTx = DB::table('transactions')->where('id', $id)->where('user_id', $userId)->first();
+            if (!$existingTx) {
+                return response()->json(['status' => 'error', 'message' => __('messages.transaction_not_found_or_unauthorized')], 404);
+            }
+
+            $walletId = $validated['wallet_id'] ?? $existingTx->wallet_id;
+            $wallet = DB::table('wallets')->where('id', $walletId)->where('user_id', $userId)->first();
+            if (!$wallet) {
+                return response()->json(['status' => 'error', 'message' => __('messages.wallet_not_found_or_unauthorized')], 404);
+            }
+
+            $sourceType = $validated['source_type'] ?? $existingTx->source_type ?? 'manual';
+            if ($sourceType === 'manual' && $wallet->type !== 'cash') {
+                $payeeId = $validated['payee_id'] ?? $existingTx->payee_id;
+                if (empty($payeeId)) {
+                    return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công qua ví ngân hàng hoặc ví điện tử bắt buộc phải có người hưởng thụ.'], 400);
                 }
-                
-                $sourceType = $validated['source_type'] ?? DB::table('transactions')->where('id', $id)->value('source_type') ?? 'manual';
-                if ($sourceType === 'manual' && $wallet->type !== 'cash') {
-                    $payeeId = $validated['payee_id'] ?? DB::table('transactions')->where('id', $id)->value('payee_id');
-                    if (empty($payeeId)) {
-                        return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công qua ví ngân hàng hoặc ví điện tử bắt buộc phải có người hưởng thụ.'], 400);
+            }
+
+            if ($sourceType === 'manual' && in_array($wallet->type, ['bank', 'ewallet'])) {
+                $categoryId = array_key_exists('category_id', $validated) ? $validated['category_id'] : $existingTx->category_id;
+                if (!empty($categoryId)) {
+                    $category = DB::table('categories')->where('id', $categoryId)->first();
+                    if ($category && $category->type === 'income') {
+                        return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_no_income_category')], 400);
                     }
                 }
-                
-                if ($wallet->currency_code !== 'VND') {
-                    return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_vnd_only')], 400);
-                }
+            }
+
+            if ($wallet->currency_code !== 'VND') {
+                return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_vnd_only')], 400);
             }
  
             $transaction = $this->transactionService->updateTransaction($id, $userId, $validated, $request->file('attachment'), $request->file('attachments'));

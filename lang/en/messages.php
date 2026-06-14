@@ -114,5 +114,7 @@ return [
     'qr_recipient_no_valid_wallet' => 'The recipient does not have a valid VND Bank or E-wallet account configured to receive funds.',
     'qr_transfer_edit_restricted' => 'QR transfers only support editing category, title, notes, and attachments.',
     'payee_not_found_or_unauthorized' => 'The payee does not exist or does not belong to you.',
+    'manual_transaction_no_income_category' => 'Manual transactions via bank or e-wallet cannot select an income category.',
+    'recurring_rule_no_income_category' => 'Recurring transactions via bank or e-wallet cannot select an income category.',
 ];
 

@@ -114,5 +114,7 @@ return [
     'qr_recipient_no_valid_wallet' => 'Người thụ hưởng không có tài khoản Ngân hàng hoặc Ví điện tử (VNĐ) hợp lệ để nhận tiền.',
     'qr_transfer_edit_restricted' => 'Giao dịch chuyển khoản QR chỉ hỗ trợ chỉnh sửa danh mục, tiêu đề, ghi chú và ảnh đính kèm.',
     'payee_not_found_or_unauthorized' => 'Người thụ hưởng không tồn tại hoặc không thuộc quyền sở hữu của bạn.',
+    'manual_transaction_no_income_category' => 'Giao dịch thủ công qua ví ngân hàng hoặc ví điện tử không được chọn danh mục thu nhập.',
+    'recurring_rule_no_income_category' => 'Giao dịch định kỳ qua ví ngân hàng hoặc ví điện tử không được chọn danh mục thu nhập.',
 ];
 
