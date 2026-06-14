@@ -15,6 +15,7 @@ use App\Http\Controllers\BroadcastController;
 use App\Http\Controllers\CronController;
 use App\Http\Controllers\DeviceTokenController;
 use App\Http\Controllers\QrTransferController;
+use App\Http\Controllers\DashboardController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::get('/verify-email/{id}/{hash}', [AuthController::class, 'verify'])
@@ -30,6 +31,9 @@ Route::get('/cron-trigger', [CronController::class, 'trigger']);
 
 // Wallet and Protected User routes
 Route::middleware(['custom.auth'])->group(function () {
+    // API Aggregation cho màn hình Dashboard chính
+    Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
+
     // Broadcast auth — Pusher sẽ gọi endpoint này để xác thực kênh private
     Route::post('/broadcasting/auth', [BroadcastController::class, 'authenticate']);
 
