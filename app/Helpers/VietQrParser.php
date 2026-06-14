@@ -21,6 +21,7 @@ class VietQrParser
                 return [
                     'type' => 'internal',
                     'identifier' => $data['identifier'],
+                    'wallet_id' => $data['wallet_id'] ?? null,
                     'amount' => isset($data['amount']) ? (float)$data['amount'] : null,
                     'description' => $data['description'] ?? null
                 ];
@@ -36,6 +37,7 @@ class VietQrParser
                     return [
                         'type' => 'internal',
                         'identifier' => $queryParams['id'],
+                        'wallet_id' => $queryParams['wallet_id'] ?? null,
                         'amount' => isset($queryParams['amount']) ? (float)$queryParams['amount'] : null,
                         'description' => $queryParams['description'] ?? null
                     ];
