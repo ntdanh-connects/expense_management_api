@@ -68,8 +68,24 @@ class SendWeeklySummary extends Command
                 )
                 ->where('user_id', $user->user_id)
                 ->where(function ($q) {
-                    $q->where('source_type', '!=', 'transfer')
-                      ->orWhereNull('source_type');
+                    $q->where(function ($sub) {
+                        $sub->where('transactions.source_type', '!=', 'transfer')
+                            ->orWhereNull('transactions.source_type');
+                    })
+                    ->orWhere(function ($sub) {
+                        $sub->where('transactions.source_type', '=', 'transfer')
+                            ->where(function ($inner) {
+                                $inner->whereNull('transactions.source_id')
+                                    ->orWhereNotExists(function ($existsQuery) {
+                                        $existsQuery->select(DB::raw(1))
+                                            ->from('wallet_transfers as wt')
+                                            ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
+                                            ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
+                                            ->whereColumn('wt.id', 'transactions.source_id')
+                                            ->whereColumn('fw.user_id', 'tw.user_id');
+                                    });
+                            });
+                    });
                 })
                 ->whereBetween('transaction_date', [$startDate, $endDate])
                 ->whereNull('deleted_at')
@@ -86,8 +102,24 @@ class SendWeeklySummary extends Command
                 ->whereNull('categories.deleted_at')
                 ->where('categories.type', 'expense')
                 ->where(function ($q) {
-                    $q->where('transactions.source_type', '!=', 'transfer')
-                      ->orWhereNull('transactions.source_type');
+                    $q->where(function ($sub) {
+                        $sub->where('transactions.source_type', '!=', 'transfer')
+                            ->orWhereNull('transactions.source_type');
+                    })
+                    ->orWhere(function ($sub) {
+                        $sub->where('transactions.source_type', '=', 'transfer')
+                            ->where(function ($inner) {
+                                $inner->whereNull('transactions.source_id')
+                                    ->orWhereNotExists(function ($existsQuery) {
+                                        $existsQuery->select(DB::raw(1))
+                                            ->from('wallet_transfers as wt')
+                                            ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
+                                            ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
+                                            ->whereColumn('wt.id', 'transactions.source_id')
+                                            ->whereColumn('fw.user_id', 'tw.user_id');
+                                    });
+                            });
+                    });
                 })
                 ->whereBetween('transactions.transaction_date', [$startDate, $endDate])
                 ->select(DB::raw("SUM(transactions.amount_in_user_currency) as total"))
@@ -102,8 +134,24 @@ class SendWeeklySummary extends Command
                 ->whereNull('categories.deleted_at')
                 ->where('categories.type', 'expense')
                 ->where(function ($q) {
-                    $q->where('transactions.source_type', '!=', 'transfer')
-                      ->orWhereNull('transactions.source_type');
+                    $q->where(function ($sub) {
+                        $sub->where('transactions.source_type', '!=', 'transfer')
+                            ->orWhereNull('transactions.source_type');
+                    })
+                    ->orWhere(function ($sub) {
+                        $sub->where('transactions.source_type', '=', 'transfer')
+                            ->where(function ($inner) {
+                                $inner->whereNull('transactions.source_id')
+                                    ->orWhereNotExists(function ($existsQuery) {
+                                        $existsQuery->select(DB::raw(1))
+                                            ->from('wallet_transfers as wt')
+                                            ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
+                                            ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
+                                            ->whereColumn('wt.id', 'transactions.source_id')
+                                            ->whereColumn('fw.user_id', 'tw.user_id');
+                                    });
+                            });
+                    });
                 })
                 ->whereBetween('transactions.transaction_date', [$startDate, $endDate])
                 ->select(
