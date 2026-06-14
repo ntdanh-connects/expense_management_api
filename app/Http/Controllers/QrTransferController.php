@@ -79,6 +79,34 @@ class QrTransferController extends Controller
                 'identifier' => $decoded['identifier'],
                 'payee_name' => $payeeName,
             ]);
+
+            // Query the recipient's target wallet name
+            $recipientWallet = null;
+            $toWalletId = $decoded['wallet_id'] ?? null;
+            if (!empty($toWalletId)) {
+                $recipientWallet = DB::table('wallets')
+                    ->where('id', $toWalletId)
+                    ->where('user_id', $recipient->user_id)
+                    ->whereNull('deleted_at')
+                    ->first();
+            }
+            if (!$recipientWallet) {
+                $recipientWallet = DB::table('wallets')
+                    ->where('user_id', $recipient->user_id)
+                    ->whereIn('type', ['bank', 'ewallet'])
+                    ->where('currency_code', 'VND')
+                    ->where('is_default_receiving', true)
+                    ->whereNull('deleted_at')
+                    ->first();
+            }
+            if (!$recipientWallet) {
+                $recipientWallet = DB::table('wallets')
+                    ->where('user_id', $recipient->user_id)
+                    ->whereIn('type', ['bank', 'ewallet'])
+                    ->where('currency_code', 'VND')
+                    ->whereNull('deleted_at')
+                    ->first();
+            }
  
             return response()->json([
                 'status' => 'success',
@@ -87,7 +115,8 @@ class QrTransferController extends Controller
                     'payee_id' => $payee->id,
                     'type' => 'internal',
                     'payee_user_id' => $recipient->user_id,
-                    'to_wallet_id' => $decoded['wallet_id'] ?? null,
+                    'to_wallet_id' => $toWalletId,
+                    'recipient_wallet_name' => $recipientWallet ? $recipientWallet->name : null,
                     'identifier' => $decoded['identifier'],
                     'payee_name' => $payeeName,
                     'avatar_url' => $recipient->profile ? $recipient->profile->avatar_url : null,
