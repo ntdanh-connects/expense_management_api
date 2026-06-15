@@ -101,9 +101,8 @@ class DashboardController extends Controller
                 ->whereNull('read_at')
                 ->count();
 
-            // 6. Tính toán tóm tắt thu chi (income, expense, net) trong tháng hiện tại (Cache theo version)
-            // Đổi cache key sang v3 để tránh xung đột với cache cũ
-            $summaryCacheKey = "user_{$userId}_dashboard_sum_v3_{$month}_{$year}";
+            // Đổi cache key sang v3 để tránh xung đột với cache cũ (thêm $version để tự động làm mới khi có giao dịch)
+            $summaryCacheKey = "user_{$userId}_dashboard_sum_v3_{$version}_{$month}_{$year}";
             $summary = Cache::remember($summaryCacheKey, 3600, function () use ($userId, $startDate, $endDate) {
                 $query = DB::table('transactions')
                     ->where('user_id', $userId)
