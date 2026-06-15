@@ -26,8 +26,8 @@ class TestAiController extends Controller
         }
 
         // Lấy user_id tự động từ token hoặc request
-        $userId = null;
-        if ($request->user()) {
+        $userId = $request->attributes->get('user_id');
+        if (!$userId && $request->user()) {
             $userId = $request->user()->user_id;
         }
         if (!$userId) {

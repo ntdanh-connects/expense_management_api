@@ -23,8 +23,8 @@ class TransactionRepository extends BaseRepository implements TransactionReposit
         if (!empty($filters['search'])) {
             $search = '%' . $filters['search'] . '%';
             $query->where(function ($q) use ($search) {
-                $q->where('transactions.title', 'like', $search)
-                  ->orWhere('transactions.notes', 'like', $search);
+                $q->where('transactions.title', 'ilike', $search)
+                  ->orWhere('transactions.notes', 'ilike', $search);
             });
         }
 
