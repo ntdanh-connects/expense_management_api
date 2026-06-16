@@ -70,6 +70,8 @@ Route::middleware(['custom.auth'])->group(function () {
     Route::post('/user/avatar', [AuthController::class, 'updateAvatar']);
     Route::post('/user/change-password', [AuthController::class, 'changePassword']);
     Route::delete('/user', [AuthController::class, 'deleteAccount']);
+    Route::get('/user/sessions', [AuthController::class, 'getActiveSessions']);
+    Route::delete('/user/sessions/{id}', [AuthController::class, 'revokeSession']);
     
     Route::get('/wallets', [WalletController::class, 'index']);
     Route::post('/wallets', [WalletController::class, 'store']);

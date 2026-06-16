@@ -37,6 +37,7 @@ class CustomTokenAuth
         }
 
         $request->attributes->set('user_id', $session->user_id);
+        $request->attributes->set('session_id', $session->id);
 
         return $next($request);
     }

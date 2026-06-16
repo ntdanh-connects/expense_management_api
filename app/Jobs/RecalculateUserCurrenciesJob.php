@@ -77,6 +77,8 @@ class RecalculateUserCurrenciesJob implements ShouldQueue
                     $categoryIds = array_merge($categoryIds, $children);
                 }
 
+                [$startDate, $endDate] = \App\Helpers\FinancialHelper::getFinancialRangeForMonth($this->userId, $month, $year);
+
                 // Query tính tổng chi tiêu bằng tiền tệ hiển thị mới
                 $query = DB::table('transactions')
                     ->where('user_id', $this->userId)
@@ -100,11 +102,10 @@ class RecalculateUserCurrenciesJob implements ShouldQueue
                                                 ->whereColumn('wt.id', 'transactions.source_id')
                                                 ->whereColumn('fw.user_id', 'tw.user_id');
                                         });
-                                });
-                        });
+                                    });
+                            });
                     })
-                    ->whereYear('transaction_date', $year)
-                    ->whereMonth('transaction_date', $month);
+                    ->whereBetween('transaction_date', [$startDate, $endDate]);
 
                 if (!empty($categoryIds)) {
                     $query->whereIn('category_id', $categoryIds);

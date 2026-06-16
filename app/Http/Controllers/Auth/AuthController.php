@@ -322,15 +322,16 @@ class AuthController extends Controller{
     public function updateProfile(Request $request): JsonResponse
     {
         $request->validate([
-            'full_name' => 'nullable|string|max:255',
-            'currency'  => 'nullable|string|in:VND,USD,EUR,GBP,JPY',
-            'timezone'  => 'nullable|string|timezone',
-            'theme'     => 'nullable|string|in:light,dark',
-            'language'  => 'nullable|string|in:vi,en',
+            'full_name'           => 'nullable|string|max:255',
+            'currency'            => 'nullable|string|in:VND,USD,EUR,GBP,JPY',
+            'timezone'            => 'nullable|string|timezone',
+            'theme'               => 'nullable|string|in:light,dark',
+            'language'            => 'nullable|string|in:vi,en',
+            'financial_start_day' => 'nullable|integer|between:1,31',
         ]);
 
         $validated = array_filter($request->only([
-            'full_name', 'currency', 'timezone', 'theme', 'language'
+            'full_name', 'currency', 'timezone', 'theme', 'language', 'financial_start_day'
         ]), fn($value) => !is_null($value));
 
         if (empty($validated)) {
@@ -607,6 +608,80 @@ class AuthController extends Controller{
                 'message' => 'Xoá tài khoản thất bại!',
                 'error'   => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * API Lấy danh sách các phiên đăng nhập đang hoạt động
+     */
+    public function getActiveSessions(Request $request): JsonResponse
+    {
+        try {
+            $userId = $request->attributes->get('user_id')
+                    ?? $request->header('X-User-Id');
+
+            if (!$userId) {
+                throw new \Exception("Không thể xác định danh tính người dùng!");
+            }
+
+            $currentSessionId = $request->attributes->get('session_id');
+
+            $sessions = $this->userService->getActiveSessions($userId);
+
+            $mappedSessions = collect($sessions)->map(function ($session) use ($currentSessionId) {
+                return [
+                    'id'          => $session->id,
+                    'device_type' => $session->device_type,
+                    'device_name' => $session->device_name,
+                    'ip_address'  => $session->ip_address,
+                    'user_agent'  => $session->user_agent,
+                    'created_at'  => $session->created_at,
+                    'expired_at'  => $session->expired_at,
+                    'is_current'  => $session->id === $currentSessionId,
+                ];
+            });
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Lấy danh sách phiên đăng nhập thành công!',
+                'data'    => $mappedSessions
+            ], 200);
+
+        } catch (\Throwable $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Lấy danh sách phiên đăng nhập thất bại!',
+                'error'   => $e->getMessage()
+            ], 400);
+        }
+    }
+
+    /**
+     * API Đăng xuất một phiên đăng nhập cụ thể theo ID
+     */
+    public function revokeSession(Request $request, string $id): JsonResponse
+    {
+        try {
+            $userId = $request->attributes->get('user_id')
+                    ?? $request->header('X-User-Id');
+
+            if (!$userId) {
+                throw new \Exception("Không thể xác định danh tính người dùng!");
+            }
+
+            $this->userService->revokeSession($userId, $id);
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Đã đăng xuất thiết bị thành công!'
+            ], 200);
+
+        } catch (\Throwable $e) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Đăng xuất thiết bị thất bại!',
+                'error'   => $e->getMessage()
+            ], 400);
         }
     }
 }

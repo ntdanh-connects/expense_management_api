@@ -164,6 +164,8 @@ class BudgetService
                 $categoryIds = array_merge($categoryIds, $children);
             }
 
+            [$startDate, $endDate] = \App\Helpers\FinancialHelper::getFinancialRangeForMonth($userId, $month, $year);
+
             // Query tính tổng số tiền của các giao dịch chi tiêu tương ứng
             $query = DB::table('transactions')
                 ->where('user_id', $userId)
@@ -190,8 +192,7 @@ class BudgetService
                             });
                     });
                 })
-                ->whereYear('transaction_date', $year)
-                ->whereMonth('transaction_date', $month);
+                ->whereBetween('transaction_date', [$startDate, $endDate]);
 
             if (!empty($categoryIds)) {
                 $query->whereIn('category_id', $categoryIds);
