@@ -26,15 +26,13 @@ Route::post('/auth/social', [AuthController::class, 'socialLogin']);
 Route::post('/auth/link-social', [AuthController::class, 'linkSocial']);
 Route::post('/auth/forgot-password', [AuthController::class, 'sendResetLinkEmail']);
 
-Route::post('/test-ai-chat', [\App\Http\Controllers\TestAiController::class, 'chat']);
-
 // Web Trigger Cron (UptimeRobot ping)
 Route::get('/cron-trigger', [CronController::class, 'trigger']);
 
 // Wallet and Protected User routes
 Route::middleware(['custom.auth'])->group(function () {
     // Trợ lý ảo AI
-    Route::post('/ai-chat', [\App\Http\Controllers\TestAiController::class, 'chat']);
+    Route::post('/ai-chat', [\App\Http\Controllers\AiChatController::class, 'chat']);
 
     // API Aggregation cho màn hình Dashboard chính
     Route::get('/dashboard/summary', [DashboardController::class, 'summary']);

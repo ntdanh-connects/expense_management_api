@@ -1,38 +1,44 @@
 <?php
 
-namespace App\Console\Commands;
+namespace App\Http\Controllers;
 
-use Illuminate\Console\Command;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
-class TestGeminiTextToSql extends Command
+class AiChatController extends Controller
 {
-    protected $signature = 'app:test-gemini-text-to-sql {prompt : Câu hỏi tự nhiên của bạn}';
-    protected $description = 'Nghiên cứu Gemini Tool Calling để biến câu hỏi tự nhiên thành SQL query và trả về câu trả lời';
-
-    public function handle()
+    public function chat(Request $request)
     {
-        $prompt = $this->argument('prompt');
+        $request->validate([
+            'prompt' => 'required|string',
+            'user_id' => 'nullable|string'
+        ]);
+
+        $prompt = $request->input('prompt');
         $apiKey = env('GEMINI_API_KEY');
         $model = env('GEMINI_MODEL', 'gemini-3.5-flash');
 
         if (!$apiKey) {
-            $this->error('Lỗi: Chưa cấu hình GEMINI_API_KEY trong file .env');
-            return 1;
+            return response()->json([
+                'error' => 'Chưa cấu hình GEMINI_API_KEY trong file .env'
+            ], 500);
         }
 
-        // 1. Lấy một user_id thực tế từ Database để giả lập đăng nhập
-        $user = DB::table('users')->first();
-        $userId = $user ? $user->user_id : '00000000-0000-0000-0000-000000000000';
+        // Lấy user_id tự động từ token hoặc request
+        $userId = $request->attributes->get('user_id');
+        if (!$userId && $request->user()) {
+            $userId = $request->user()->user_id;
+        }
+        if (!$userId) {
+            $userId = $request->input('user_id');
+        }
+        if (!$userId) {
+            $user = DB::table('users')->first();
+            $userId = $user ? $user->user_id : '00000000-0000-0000-0000-000000000000';
+        }
 
-        $this->info("-----------------------------------------------------------------");
-        $this->info("👤 Giả lập Người dùng hiện tại có ID: " . $userId);
-        $this->info("❓ Câu hỏi: \"{$prompt}\"");
-        $this->info("🤖 Sử dụng Model: {$model}");
-        $this->info("-----------------------------------------------------------------");
-
-        // 2. Định nghĩa Database Schema chi tiết cho Gemini
+        // 1. Database Schema
         $systemInstruction = "Bạn là chuyên gia phân tích dữ liệu tài chính SQL. "
             . "Nhiệm vụ của bạn là nhận câu hỏi tự nhiên của người dùng và chuyển thành câu lệnh SQL PostgreSQL phù hợp.\n\n"
             . "Dưới đây là cấu trúc cơ sở dữ liệu (Database Schema):\n"
@@ -107,7 +113,7 @@ class TestGeminiTextToSql extends Command
             . "9. KHÔNG TRẢ VỀ SQL THÔ: Bạn KHÔNG ĐƯỢC phép trả về câu lệnh SQL thô dưới dạng văn bản (text) trực tiếp cho người dùng. Bạn bắt buộc phải gọi công cụ `execute_sql_query` để thực thi câu lệnh SQL đó.\n"
             . "- Sử dụng công cụ `execute_sql_query` để thực thi câu lệnh SQL PostgreSQL hợp lệ.";
 
-        // 3. Định nghĩa Tool gọi SQL
+        // 2. Định nghĩa Tool
         $tools = [
             [
                 'function_declarations' => [
@@ -129,7 +135,7 @@ class TestGeminiTextToSql extends Command
             ]
         ];
 
-        // 4. Gửi request đầu tiên đến Gemini
+        // 3. Gọi Gemini API (lượt 1)
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}";
         
         $payload = [
@@ -147,130 +153,144 @@ class TestGeminiTextToSql extends Command
             ]
         ];
 
-        $this->comment("Đang gửi yêu cầu phân tích cho Gemini...");
-        $response = Http::post($url, $payload);
-
-        if ($response->failed()) {
-            $this->error('Lỗi API Gemini: ' . $response->body());
-            return 1;
-        }
-
-        $result = $response->json();
-        $part = $result['candidates'][0]['content']['parts'][0] ?? null;
-
-        if (!$part) {
-            $this->error('Không nhận được phản hồi hợp lệ từ Gemini: ' . json_encode($result));
-            return 1;
-        }
-
-        // 5. Xử lý yêu cầu gọi Tool từ Gemini
-        if (isset($part['functionCall'])) {
-            $functionCall = $part['functionCall'];
-            $functionName = $functionCall['name'];
-            $args = $functionCall['args'];
-            $sqlQuery = $args['sql_query'] ?? '';
-
-            $this->warn("🤖 AI đã sinh SQL Query: ");
-            $this->line("   " . $sqlQuery);
-
-            // Kiểm soát an toàn (Sandbox)
-            if (!$this->isSqlQuerySafe($sqlQuery)) {
-                $this->error("❌ CẢNH BÁO BẢO MẬT: Phát hiện câu lệnh SQL không an toàn hoặc chứa từ khóa sửa đổi dữ liệu!");
-                return 1;
+        try {
+            $response = Http::post($url, $payload);
+            
+            if ($response->failed()) {
+                return response()->json([
+                    'error' => 'Lỗi gọi API Gemini lượt 1',
+                    'details' => $response->json() ?? $response->body()
+                ], 502);
             }
 
-            // Thực thi truy vấn
-            try {
-                $this->comment("⚙️ Đang thực thi truy vấn vào Database...");
-                $queryResult = DB::select($sqlQuery);
-                // Giới hạn hiển thị log để không làm rối màn hình
-                $resultCount = count($queryResult);
-                $this->info("✅ Đã tìm thấy {$resultCount} dòng kết quả.");
-            } catch (\Exception $e) {
-                $this->error("❌ Lỗi khi thực thi SQL: " . $e->getMessage());
-                // Gửi thông báo lỗi cho AI để nó giải thích cho người dùng
-                $queryResult = ['error' => $e->getMessage()];
+            $result = $response->json();
+            $part = $result['candidates'][0]['content']['parts'][0] ?? null;
+
+            if (!$part) {
+                return response()->json([
+                    'error' => 'Không có phản hồi từ Gemini',
+                    'raw_response' => $result
+                ], 502);
             }
 
-            // Gửi dữ liệu trả về cho Gemini để sinh câu trả lời tự nhiên
-            $this->comment("Đang gửi dữ liệu kết quả cho Gemini tổng hợp...");
-            $finalPayload = [
-                'contents' => [
-                    [
-                        'role' => 'user',
-                        'parts' => [['text' => $prompt]]
-                    ],
-                    [
-                        'role' => 'model',
-                        'parts' => [$part]
-                    ],
-                    [
-                        'role' => 'user',
-                        'parts' => [
-                            [
-                                'functionResponse' => [
-                                    'name' => $functionName,
-                                    'response' => [
-                                        'result' => $queryResult
+            $sqlQuery = null;
+            $dbResults = [];
+
+            // 4. Nếu AI yêu cầu gọi Tool
+            if (isset($part['functionCall'])) {
+                $functionCall = $part['functionCall'];
+                $functionName = $functionCall['name'];
+                $args = $functionCall['args'];
+                $sqlQuery = $args['sql_query'] ?? '';
+
+                // Kiểm soát an toàn SQL
+                if (!$this->isSqlQuerySafe($sqlQuery)) {
+                    return response()->json([
+                        'error' => 'Cảnh báo bảo mật: Câu lệnh SQL không an toàn.',
+                        'sql_query' => $sqlQuery
+                    ], 403);
+                }
+
+                // Thực thi SQL
+                try {
+                    $dbResults = DB::select($sqlQuery);
+                } catch (\Exception $e) {
+                    $dbResults = ['error' => $e->getMessage()];
+                }
+
+                // Gửi ngược kết quả cho Gemini (lượt 2)
+                $finalPayload = [
+                    'contents' => [
+                        [
+                            'role' => 'user',
+                            'parts' => [['text' => $prompt]]
+                        ],
+                        [
+                            'role' => 'model',
+                            'parts' => [$part]
+                        ],
+                        [
+                            'role' => 'user',
+                            'parts' => [
+                                [
+                                    'functionResponse' => [
+                                        'name' => $functionName,
+                                        'response' => [
+                                            'result' => $dbResults
+                                        ]
                                     ]
                                 ]
                             ]
                         ]
+                    ],
+                    'tools' => $tools,
+                    'system_instruction' => [
+                        'parts' => [
+                            ['text' => $systemInstruction]
+                        ]
                     ]
-                ],
-                'tools' => $tools,
-                'system_instruction' => [
-                    'parts' => [
-                        ['text' => $systemInstruction]
-                    ]
-                ]
-            ];
+                ];
 
-            $finalResponse = Http::post($url, $finalPayload);
+                $finalResponse = Http::post($url, $finalPayload);
 
-            if ($finalResponse->failed()) {
-                $this->error('Lỗi khi gửi kết quả cho Gemini: ' . $finalResponse->body());
-                return 1;
+                if ($finalResponse->failed()) {
+                    return response()->json([
+                        'error' => 'Lỗi gọi API Gemini lượt 2',
+                        'sql_query' => $sqlQuery,
+                        'db_results' => $dbResults,
+                        'details' => $finalResponse->json() ?? $finalResponse->body()
+                    ], 502);
+                }
+
+                $finalResult = $finalResponse->json();
+                $outputText = $finalResult['candidates'][0]['content']['parts'][0]['text'] ?? 'Không có câu trả lời.';
+
+                return response()->json([
+                    'success' => true,
+                    'user_id' => $userId,
+                    'prompt' => $prompt,
+                    'model' => $model,
+                    'sql_query' => $sqlQuery,
+                    'db_results' => $dbResults,
+                    'response' => $outputText
+                ]);
+
+            } else {
+                // Nếu AI phản hồi trực tiếp không qua tool
+                return response()->json([
+                    'success' => true,
+                    'user_id' => $userId,
+                    'prompt' => $prompt,
+                    'model' => $model,
+                    'sql_query' => null,
+                    'db_results' => [],
+                    'response' => $part['text'] ?? 'Không có câu trả lời.'
+                ]);
             }
 
-            $finalResult = $finalResponse->json();
-            $outputText = $finalResult['candidates'][0]['content']['parts'][0]['text'] ?? 'Không có câu trả lời.';
-
-            $this->line("");
-            $this->info("✨ Trợ lý AI phản hồi:");
-            $this->comment($outputText);
-
-        } else {
-            // Trường hợp Gemini trả lời trực tiếp mà không cần công cụ
-            $this->line("");
-            $this->info("✨ Trợ lý AI phản hồi trực tiếp:");
-            $this->comment($part['text'] ?? 'Không có câu trả lời.');
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Lỗi xử lý server',
+                'message' => $e->getMessage()
+            ], 500);
         }
-
-        return 0;
     }
 
-    /**
-     * Hàm kiểm tra an toàn câu lệnh SQL
-     */
     private function isSqlQuerySafe(string $sql): bool
     {
         $sqlLower = strtolower(trim($sql));
 
-        // Bắt buộc phải bắt đầu bằng lệnh SELECT
         if (!str_starts_with($sqlLower, 'select') && !str_starts_with($sqlLower, 'with')) {
             return false;
         }
 
-        // Danh sách các từ khóa nguy hại/sửa đổi dữ liệu
         $forbiddenKeywords = [
             'insert', 'update', 'delete', 'drop', 'truncate', 'alter',
             'create', 'grant', 'revoke', 'replace', 'vacuum', 'analyze',
-            'into', 'union' // Union cũng có thể được dùng để SQL injection lấy bảng khác
+            'into', 'union'
         ];
 
         foreach ($forbiddenKeywords as $keyword) {
-            // Dùng biểu thức chính quy để kiểm tra từ độc lập, tránh chặn các từ ghép vô tội như "created_at" hay "updated_at"
             if (preg_match('/\b' . $keyword . '\b/', $sqlLower)) {
                 return false;
             }
