@@ -531,9 +531,10 @@ class UserService
             if (!empty($preferenceData)) {
                 $preference = $user->preference;
                 $oldCurrency = $preference ? $preference->currency : 'VND';
+                $oldFinancialStartDay = $preference ? $preference->financial_start_day : 1;
 
                 if (!$preference) {
-                    $user->preference()->create(array_merge([
+                    $preference = $user->preference()->create(array_merge([
                         'language'            => 'vi',
                         'theme'               => 'light',
                         'currency'            => 'VND',
@@ -550,6 +551,17 @@ class UserService
                 if ($newCurrency && strtoupper($newCurrency) !== strtoupper($oldCurrency)) {
                     // Dispatch Job chạy ngầm để tính toán lại tỷ giá và ngân sách theo đồng tiền mới
                     \App\Jobs\RecalculateUserCurrenciesJob::dispatch($userId, $newCurrency);
+                }
+
+                $newFinancialStartDay = $preferenceData['financial_start_day'] ?? null;
+                if ($newFinancialStartDay && (int)$newFinancialStartDay !== (int)$oldFinancialStartDay) {
+                    // Tính toán lại tất cả các ngân sách của user theo chu kỳ tài chính mới
+                    $budgets = \App\Models\Budget::where('user_id', $userId)->get();
+                    $budgetService = app(\App\Services\BudgetService::class);
+                    foreach ($budgets as $budget) {
+                        $budgetService->recalculateSingleBudget($budget);
+                    }
+                    \Illuminate\Support\Facades\Cache::increment("user_{$userId}_report_version");
                 }
             }
 
@@ -654,5 +666,32 @@ class UserService
             // Cuối cùng xoá bản ghi chính trong bảng users
             DB::table('users')->where('user_id', $userId)->delete();
         });
+    }
+
+    /**
+     * Lấy danh sách các phiên đăng nhập đang hoạt động của người dùng
+     */
+    public function getActiveSessions(string $userId)
+    {
+        return DB::table('user_sessions')
+            ->where('user_id', $userId)
+            ->whereNull('revoked_at')
+            ->where('expired_at', '>', now())
+            ->orderBy('created_at', 'desc')
+            ->get(['id', 'device_type', 'device_name', 'ip_address', 'user_agent', 'created_at', 'expired_at']);
+    }
+
+    /**
+     * Hủy bỏ một phiên đăng nhập cụ thể của người dùng
+     */
+    public function revokeSession(string $userId, string $sessionId): void
+    {
+        DB::table('user_sessions')
+            ->where('user_id', $userId)
+            ->where('id', $sessionId)
+            ->whereNull('revoked_at')
+            ->update([
+                'revoked_at' => now()
+            ]);
     }
 }

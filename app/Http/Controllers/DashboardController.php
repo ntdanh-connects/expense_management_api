@@ -42,14 +42,9 @@ class DashboardController extends Controller
             // Lấy version cache hiện tại của user để làm cache key cho các phần dữ liệu thay đổi theo giao dịch
             $version = Cache::get("user_{$userId}_report_version", 1);
 
-            // 1. Xác định timezone và khoảng thời gian tháng hiện tại của người dùng
-            $userTimezone = DB::table('user_preferences')->where('user_id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
-            $nowInUserTz = Carbon::now($userTimezone);
-            $startDate = (clone $nowInUserTz)->startOfMonth()->setTimezone('UTC');
-            $endDate = (clone $nowInUserTz)->endOfMonth()->setTimezone('UTC');
-
-            $month = (int) $nowInUserTz->format('m');
-            $year = (int) $nowInUserTz->format('Y');
+            // 1. Xác định timezone và khoảng thời gian tháng hiện tại của người dùng theo chu kỳ tài chính
+            [$startDate, $endDate] = \App\Helpers\FinancialHelper::getFinancialRangeForDate($userId, \Illuminate\Support\Carbon::now());
+            [$month, $year] = \App\Helpers\FinancialHelper::getFinancialMonthAndYearForDate($userId, \Illuminate\Support\Carbon::now());
 
             // 2. Lấy danh sách ví và số dư (Không cache hoặc cache rất ngắn để hiển thị cấu hình ví/số dư thay đổi tức thời)
             $wallets = $this->walletService->getAllUserWallets($userId);

@@ -25,33 +25,35 @@ class UpdateBudgetUsage implements ShouldQueue
 
         // Cặp hiện tại từ giao dịch
         $date = Carbon::parse($transaction->transaction_date);
+        [$month, $year] = \App\Helpers\FinancialHelper::getFinancialMonthAndYearForDate($userId, $date);
         $targets[] = [
             'category_id' => $transaction->category_id,
-            'month' => $date->month,
-            'year' => $date->year
+            'month' => $month,
+            'year' => $year
         ];
         // Thêm ngân sách tổng (category_id = null)
         $targets[] = [
             'category_id' => null,
-            'month' => $date->month,
-            'year' => $date->year
+            'month' => $month,
+            'year' => $year
         ];
 
         // Cặp cũ (nếu có update và có thay đổi thông tin quan trọng)
         if ($event->oldData) {
             $oldDate = Carbon::parse($event->oldData['transaction_date'] ?? $transaction->transaction_date);
             $oldCategoryId = array_key_exists('category_id', $event->oldData) ? $event->oldData['category_id'] : $transaction->category_id;
+            [$oldMonth, $oldYear] = \App\Helpers\FinancialHelper::getFinancialMonthAndYearForDate($userId, $oldDate);
             
             $targets[] = [
                 'category_id' => $oldCategoryId,
-                'month' => $oldDate->month,
-                'year' => $oldDate->year
+                'month' => $oldMonth,
+                'year' => $oldYear
             ];
             // Thêm ngân sách tổng cũ
             $targets[] = [
                 'category_id' => null,
-                'month' => $oldDate->month,
-                'year' => $oldDate->year
+                'month' => $oldMonth,
+                'year' => $oldYear
             ];
         }
 
@@ -103,6 +105,8 @@ class UpdateBudgetUsage implements ShouldQueue
                     $categoryIds = array_merge($categoryIds, $children);
                 }
 
+                [$startDate, $endDate] = \App\Helpers\FinancialHelper::getFinancialRangeForMonth($userId, $month, $year);
+
                 // Query sum tất cả giao dịch chi tiêu hoàn tất của user
                 $query = DB::table('transactions')
                     ->where('user_id', $userId)
@@ -129,8 +133,7 @@ class UpdateBudgetUsage implements ShouldQueue
                                 });
                         });
                     })
-                    ->whereYear('transaction_date', $year)
-                    ->whereMonth('transaction_date', $month);
+                    ->whereBetween('transaction_date', [$startDate, $endDate]);
 
                 if (!empty($categoryIds)) {
                     $query->whereIn('category_id', $categoryIds);

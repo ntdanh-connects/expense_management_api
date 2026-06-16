@@ -31,6 +31,9 @@ Route::get('/cron-trigger', [CronController::class, 'trigger']);
 
 // Wallet and Protected User routes
 Route::middleware(['custom.auth'])->group(function () {
+    // Trợ lý ảo AI
+    Route::post('/ai-chat', [\App\Http\Controllers\AiChatController::class, 'chat']);
+
     // API Aggregation cho màn hình Dashboard chính
     Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
 
@@ -65,6 +68,8 @@ Route::middleware(['custom.auth'])->group(function () {
     Route::post('/user/avatar', [AuthController::class, 'updateAvatar']);
     Route::post('/user/change-password', [AuthController::class, 'changePassword']);
     Route::delete('/user', [AuthController::class, 'deleteAccount']);
+    Route::get('/user/sessions', [AuthController::class, 'getActiveSessions']);
+    Route::delete('/user/sessions/{id}', [AuthController::class, 'revokeSession']);
     
     Route::get('/wallets', [WalletController::class, 'index']);
     Route::post('/wallets', [WalletController::class, 'store']);
