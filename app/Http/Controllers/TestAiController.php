@@ -109,7 +109,9 @@ class TestAiController extends Controller
             . "5. THỜI GIAN & MÚI GIỜ: Ngày tháng trong `transaction_date` lưu theo giờ UTC. Người dùng ở múi giờ 'Asia/Ho_Chi_Minh' (+07:00). Khi tính theo tháng hiện tại, hãy dùng: `WHERE transaction_date >= DATE_TRUNC('month', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh' AND transaction_date < DATE_TRUNC('month', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh' + INTERVAL '1 month'` hoặc truy vấn tương đương.\n"
             . "6. Chỉ tạo câu lệnh SELECT an toàn. Không thực hiện các hành động sửa đổi cấu trúc hay dữ liệu.\n"
             . "7. XỬ LÝ LỖI GÕ PHÍM & TỪ VIẾT TẮT TIẾNG VIỆT: Người dùng thường nhắn tin nhanh bằng tiếng Việt không dấu, viết tắt (tui -> tôi, ko/k -> không, vs -> với) hoặc lỗi gõ Telex (ví dụ: gõ 'gì' thành 'gif' do phím f là dấu huyền nhưng chưa bật Telex, hoặc 'tiêu' thành 'tieeu', 'nhiều' thành 'nhieeu'). Bạn PHẢI tự động suy luận và chuẩn hóa các lỗi gõ Telex/từ viết tắt này thành nghĩa chuẩn tiếng Việt trước khi tạo câu lệnh SQL (ví dụ: 'tiêu vào cái gif nhiều nhất' thực chất nghĩa là 'tiêu vào cái gì nhiều nhất', bạn phải tạo SQL truy vấn tổng quát tìm danh mục chi tiêu nhiều nhất chứ không được lọc theo từ khóa 'gif').\n"
-            . "- Trả về câu lệnh SQL viết bằng chuẩn PostgreSQL.";
+            . "8. XỬ LÝ YÊU CẦU TÓM TẮT/BÁO CÁO CHI TIÊU: Khi người dùng yêu cầu 'tóm tắt chi tiêu' hoặc 'báo cáo chi tiêu' (theo tuần, tháng, v.v.), bạn KHÔNG ĐƯỢC chỉ truy vấn tổng số tiền (SUM). Thay vào đó, bạn PHẢI truy vấn số tiền chi tiêu được nhóm theo từng danh mục (GROUP BY tên danh mục và tính SUM số tiền, sắp xếp giảm dần) hoặc lấy danh sách các giao dịch chi tiết để có dữ liệu phân tích cụ thể.\n"
+            . "9. KHÔNG TRẢ VỀ SQL THÔ: Bạn KHÔNG ĐƯỢC phép trả về câu lệnh SQL thô dưới dạng văn bản (text) trực tiếp cho người dùng. Bạn bắt buộc phải gọi công cụ `execute_sql_query` để thực thi câu lệnh SQL đó.\n"
+            . "- Sử dụng công cụ `execute_sql_query` để thực thi câu lệnh SQL PostgreSQL hợp lệ.";
 
         // 2. Định nghĩa Tool
         $tools = [
