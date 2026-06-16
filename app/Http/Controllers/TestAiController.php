@@ -54,7 +54,7 @@ class TestAiController extends Controller
             . "   - `available_balance` (decimal, số tiền hiện có trong ví)\n"
             . "3. Bảng `categories` (Danh mục thu chi):\n"
             . "   - `id` (uuid, khóa chính)\n"
-            . "   - `user_id` (uuid, khóa ngoại)\n"
+            . "   - `user_id` (uuid, khóa ngoại. Bằng NULL đối với các danh mục mặc định của hệ thống)\n"
             . "   - `name` (varchar, tên danh mục như 'Ăn uống', 'Lương')\n"
             . "   - `type` (enum: 'income', 'expense')\n"
             . "   - `deleted_at` (timestamptz)\n"
@@ -69,6 +69,7 @@ class TestAiController extends Controller
             . "   - `amount_in_user_currency` (decimal, số tiền quy đổi sang tiền tệ chính của người dùng)\n"
             . "   - `title` (varchar, tên/nội dung giao dịch)\n"
             . "   - `source_type` (enum: 'manual', 'recurring', 'transfer', 'import', 'adjustment')\n"
+            . "   - `source_id` (uuid, ID nguồn của giao dịch liên kết với wallet_transfers.id)\n"
             . "   - `transaction_date` (timestamptz)\n"
             . "   - `deleted_at` (timestamptz)\n"
             . "5. Bảng `wallet_transfers` (Chuyển khoản nội bộ giữa các ví):\n"
@@ -100,13 +101,14 @@ class TestAiController extends Controller
             . "   - `is_active` (bool)\n"
             . "   - `deleted_at` (timestamptz)\n\n"
             . "QUY TẮC BẮT BUỘC KHI VIẾT SQL (BẢO MẬT & ĐỘ CHÍNH XÁC):\n"
-            . "1. BẢO MẬT USER: Người dùng hiện tại có ID là: '{$userId}'. Bạn BẮT BUỘC phải lọc theo điều kiện `user_id = '{$userId}'` cho TẤT CẢ các bảng để tránh lộ dữ liệu (ví dụ: `wallets.user_id = '{$userId}'`, `transactions.user_id = '{$userId}'`, `budgets.user_id = '{$userId}'`, `recurring_rules.user_id = '{$userId}'`). Đối với các bảng liên kết như `wallet_balances` và `budget_usages`, bạn phải join với bảng cha để lọc theo `user_id`.\n"
+            . "1. BẢO MẬT USER: Người dùng hiện tại có ID là: '{$userId}'. Bạn BẮT BUỘC phải lọc theo điều kiện `user_id = '{$userId}'` cho TẤT CẢ các bảng để tránh lộ dữ liệu (ví dụ: `wallets.user_id = '{$userId}'`, `transactions.user_id = '{$userId}'`, `budgets.user_id = '{$userId}'`, `recurring_rules.user_id = '{$userId}'`). Đối với các bảng liên kết như `wallet_balances` và `budget_usages`, bạn phải join với bảng cha để lọc theo `user_id`. LƯU Ý RIÊNG CHO BẢNG `categories`: Bảng này chứa cả danh mục hệ thống (có `user_id IS NULL`) và danh mục riêng của user, nên bạn PHẢI dùng điều kiện: `(categories.user_id = '{$userId}' OR categories.user_id IS NULL)`.\n"
             . "2. SOFT DELETE: Chỉ lấy dữ liệu chưa xóa. Luôn thêm điều kiện `deleted_at IS NULL` cho các bảng `transactions`, `wallets`, `categories`, `recurring_rules`.\n"
             . "3. QUY ĐỔI TIỀN TỆ: Khi tính tổng số tiền (SUM, AVG) thu nhập/chi tiêu, bạn PHẢI dùng cột `amount_in_user_currency` của bảng `transactions` thay vì cột `amount`.\n"
             . "4. LOẠI BỎ CHUYỂN KHOẢN NỘI BỘ: Khi tính tổng thu nhập hoặc chi tiêu, bạn PHẢI loại trừ các giao dịch luân chuyển nội bộ (chuyển tiền giữa các ví của chính mình). Hãy thêm điều kiện lọc sau vào câu lệnh SQL của bạn:\n"
             . "   `AND (transactions.source_type != 'transfer' OR transactions.source_type IS NULL OR transactions.source_id NOT IN (SELECT wt.id FROM wallet_transfers wt JOIN wallets fw ON wt.from_wallet_id = fw.id JOIN wallets tw ON wt.to_wallet_id = tw.id WHERE fw.user_id = tw.user_id))`\n"
-            . "5. THỜI GIAN & MÚI GIỜ: Ngày tháng trong `transaction_date` lưu theo giờ UTC. Người dùng ở múi giờ 'Asia/Ho_Chi_Minh' (+07:00). Khi tính theo tháng hiện tại, hãy dùng: `WHERE transaction_date >= DATE_TRUNC('month', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh') AND transaction_date < DATE_TRUNC('month', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh') + INTERVAL '1 month'` hoặc truy vấn tương đương.\n"
+            . "5. THỜI GIAN & MÚI GIỜ: Ngày tháng trong `transaction_date` lưu theo giờ UTC. Người dùng ở múi giờ 'Asia/Ho_Chi_Minh' (+07:00). Khi tính theo tháng hiện tại, hãy dùng: `WHERE transaction_date >= DATE_TRUNC('month', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh' AND transaction_date < DATE_TRUNC('month', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh' + INTERVAL '1 month'` hoặc truy vấn tương đương.\n"
             . "6. Chỉ tạo câu lệnh SELECT an toàn. Không thực hiện các hành động sửa đổi cấu trúc hay dữ liệu.\n"
+            . "7. XỬ LÝ LỖI GÕ PHÍM & TỪ VIẾT TẮT TIẾNG VIỆT: Người dùng thường nhắn tin nhanh bằng tiếng Việt không dấu, viết tắt (tui -> tôi, ko/k -> không, vs -> với) hoặc lỗi gõ Telex (ví dụ: gõ 'gì' thành 'gif' do phím f là dấu huyền nhưng chưa bật Telex, hoặc 'tiêu' thành 'tieeu', 'nhiều' thành 'nhieeu'). Bạn PHẢI tự động suy luận và chuẩn hóa các lỗi gõ Telex/từ viết tắt này thành nghĩa chuẩn tiếng Việt trước khi tạo câu lệnh SQL (ví dụ: 'tiêu vào cái gif nhiều nhất' thực chất nghĩa là 'tiêu vào cái gì nhiều nhất', bạn phải tạo SQL truy vấn tổng quát tìm danh mục chi tiêu nhiều nhất chứ không được lọc theo từ khóa 'gif').\n"
             . "- Trả về câu lệnh SQL viết bằng chuẩn PostgreSQL.";
 
         // 2. Định nghĩa Tool
