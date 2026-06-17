@@ -148,6 +148,10 @@ class WalletService {
             $fromWalletCurrency = $fromWallet->currency_code ?? 'VND';
             $toWalletCurrency = $toWallet->currency_code ?? 'VND';
 
+            if ($fromWalletCurrency !== $toWalletCurrency) {
+                throw new \Exception('Chuyển khoản nội bộ giữa hai ví có đơn vị tiền tệ khác nhau không được hỗ trợ.');
+            }
+
             // Tra cứu tỷ giá giữa 2 ví
             $rate = $this->exchangeRateService->getRate($fromWalletCurrency, $toWalletCurrency);
             $convertedAmount = (float) bcmul(number_format($amount, 4, '.', ''), number_format($rate, 6, '.', ''), 4);
