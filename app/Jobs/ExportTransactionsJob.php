@@ -177,7 +177,6 @@ class ExportTransactionsJob implements ShouldQueue
             ob_start();
             $writer->save('php://output');
             $excelContent = ob_get_clean();
-            $spreadsheet->disconnectCells();
 
             // 4. Lưu file lên S3 / Local Disk
             $filename = "exports/{$this->userId}/transactions_{$this->exportId}.xlsx";
