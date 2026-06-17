@@ -35,9 +35,16 @@ class FcmService
 
             // 1. Kiểm tra xem credentials có phải là chuỗi JSON trực tiếp không
             $decoded = json_decode($credentials, true);
-            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-                $jsonData = $decoded;
-            } else {
+            if (json_last_error() === JSON_ERROR_NONE) {
+                if (is_string($decoded)) {
+                    $decoded = json_decode($decoded, true);
+                }
+                if (is_array($decoded)) {
+                    $jsonData = $decoded;
+                }
+            }
+            
+            if (!$jsonData) {
                 // 2. Nếu không phải JSON, coi đó là đường dẫn file
                 $path = $credentials;
                 if (!file_exists($path)) {
@@ -157,6 +164,14 @@ class FcmService
                     $successCount++;
                 } else {
                     Log::error('FCM: Lỗi gửi thông báo đến token ' . substr($token, 0, 10) . '... Phản hồi: ' . $response->body());
+
+                    // Tự động xoá token hết hạn/unregistered khỏi database để tối ưu hiệu năng
+                    $resData = $response->json();
+                    $errorCode = $resData['error']['details'][0]['errorCode'] ?? null;
+                    if ($response->status() === 404 || $errorCode === 'UNREGISTERED') {
+                        \Illuminate\Support\Facades\DB::table('user_device_tokens')->where('device_token', $token)->delete();
+                        Log::info('FCM: Đã xoá token hết hạn/unregistered khỏi DB: ' . substr($token, 0, 15) . '...');
+                    }
                 }
             } catch (\Exception $e) {
                 Log::error('FCM: Exception xảy ra khi gửi thông báo: ' . $e->getMessage());
