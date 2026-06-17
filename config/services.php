@@ -46,6 +46,12 @@ return [
         'redirect'      => env('GITHUB_REDIRECT_URI'),
     ],
 
+    'github_web' => [
+        'client_id'     => env('GITHUB_WEB_CLIENT_ID'),
+        'client_secret' => env('GITHUB_WEB_CLIENT_SECRET'),
+        'redirect'      => env('GITHUB_WEB_REDIRECT_URI'),
+    ],
+
     'firebase' => [
         'credentials' => env('FIREBASE_CREDENTIALS', storage_path('app/firebase-service-account.json')),
         'project_id' => env('FIREBASE_PROJECT_ID'),

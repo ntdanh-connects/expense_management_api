@@ -353,9 +353,22 @@ class UserService
             $accessToken = $token;
 
             if (!str_starts_with($token, 'gho_') && !str_starts_with($token, 'ghp_')) {
+                // Kiểm tra xem redirectUri có chứa tên miền Web (localhost hoặc onrender) không
+                $isWebRedirect = $redirectUri && (
+                    str_contains($redirectUri, 'localhost') || 
+                    str_contains($redirectUri, 'onrender.com')
+                );
+                // Nếu là Web, dùng bộ khóa github_web. Ngược lại dùng bộ khóa mặc định (Mobile)
+                $clientId = ($isWebRedirect && config('services.github_web.client_id'))
+                    ? config('services.github_web.client_id')
+                    : config('services.github.client_id');
+                $clientSecret = ($isWebRedirect && config('services.github_web.client_secret'))
+                    ? config('services.github_web.client_secret')
+                    : config('services.github.client_secret');
+
                 $exchangeParams = [
-                    'client_id'     => config('services.github.client_id'),
-                    'client_secret' => config('services.github.client_secret'),
+                    'client_id'     => $clientId,
+                    'client_secret' => $clientSecret,
                     'code'          => $token,
                 ];
                 
