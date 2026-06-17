@@ -3,11 +3,12 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use App\Channels\CustomDbChannel;
 
-class ExportCompletedNotification extends Notification
+class ExportCompletedNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -22,6 +23,7 @@ class ExportCompletedNotification extends Notification
         $this->isSuccess = $isSuccess;
         $this->fileUrl = $fileUrl;
         $this->errorMessage = $errorMessage;
+        $this->afterCommit = true;
     }
 
     /**

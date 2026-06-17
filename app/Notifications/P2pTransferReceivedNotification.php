@@ -3,11 +3,12 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use App\Channels\CustomDbChannel;
 
-class P2pTransferReceivedNotification extends Notification
+class P2pTransferReceivedNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -22,6 +23,7 @@ class P2pTransferReceivedNotification extends Notification
         $this->amount = $amount;
         $this->currency = $currency;
         $this->notes = $notes;
+        $this->afterCommit = true;
     }
 
     /**

@@ -5,11 +5,12 @@ namespace App\Notifications;
 use App\Models\RecurringRule;
 use App\Models\Transaction;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use App\Channels\CustomDbChannel;
 
-class RecurringTransactionExecutedNotification extends Notification
+class RecurringTransactionExecutedNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -24,6 +25,7 @@ class RecurringTransactionExecutedNotification extends Notification
         $this->transaction = $transaction;
         $this->status = $status;
         $this->errorMessage = $errorMessage;
+        $this->afterCommit = true;
     }
 
     /**

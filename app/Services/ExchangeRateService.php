@@ -22,132 +22,151 @@ class ExchangeRateService
 
     /**
      * Lấy tỷ giá mới nhất quy đổi từ gốc USD.
-     * Áp dụng cơ chế Cache trong 12 giờ.
+     * Đọc trực tiếp từ Cache, nếu không có mới tải đồng bộ (với timeout ngắn).
      */
     public function getLatestRates(): array
     {
-        $rates = Cache::remember('latest_exchange_rates', 43200, function () {
+        $rates = Cache::get('latest_exchange_rates');
+        
+        if (!$rates) {
+            $rates = $this->fetchLatestRates();
+            // Tự động làm giàu tỷ giá VND lấy trực tiếp từ Vietcombank USD Transfer Rate
             try {
-                // Thử gọi API chính
-                $response = Http::timeout(5)->get('https://api.frankfurter.dev/v1/latest', [
-                    'from' => 'USD'
-                ]);
-
-                if ($response->successful()) {
-                    $data = $response->json();
-                    return $this->formatRates($data['rates'] ?? []);
+                $vcbRates = $this->getVcbRates();
+                if (isset($vcbRates['USD']['buy_transfer'])) {
+                    $rates['VND'] = (float)$vcbRates['USD']['buy_transfer'];
                 }
-
-                // Nếu API chính lỗi, thử gọi API dự phòng
-                $fallbackResponse = Http::timeout(5)->get('https://api.frankfurter.app/latest', [
-                    'from' => 'USD'
-                ]);
-
-                if ($fallbackResponse->successful()) {
-                    $data = $fallbackResponse->json();
-                    return $this->formatRates($data['rates'] ?? []);
-                }
-
             } catch (\Throwable $e) {
-                Log::error('Lỗi kết nối API tỷ giá hối đoái, sử dụng cấu hình dự phòng:', [
-                    'error' => $e->getMessage()
-                ]);
+                Log::warning('Không thể cập nhật tỷ giá VND từ Vietcombank: ' . $e->getMessage());
             }
-
-            // Trả về dữ liệu dự phòng nếu mọi cuộc gọi đều thất bại
-            return $this->fallbackRates;
-        });
-
-        // Tự động làm giàu tỷ giá VND lấy trực tiếp từ Vietcombank USD Transfer Rate
-        try {
-            $vcbRates = $this->getVcbRates();
-            if (isset($vcbRates['USD']['buy_transfer'])) {
-                $rates['VND'] = (float)$vcbRates['USD']['buy_transfer'];
-            }
-        } catch (\Throwable $e) {
-            Log::warning('Không thể cập nhật tỷ giá VND từ Vietcombank: ' . $e->getMessage());
         }
 
         return $rates;
     }
 
     /**
+     * Tải trực tiếp tỷ giá từ API Frankfurter với timeout 3s.
+     */
+    public function fetchLatestRates(): array
+    {
+        try {
+            // Thử gọi API chính
+            $response = Http::timeout(3)->get('https://api.frankfurter.dev/v1/latest', [
+                'from' => 'USD'
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                return $this->formatRates($data['rates'] ?? []);
+            }
+
+            // Nếu API chính lỗi, thử gọi API dự phòng
+            $fallbackResponse = Http::timeout(3)->get('https://api.frankfurter.app/latest', [
+                'from' => 'USD'
+            ]);
+
+            if ($fallbackResponse->successful()) {
+                $data = $fallbackResponse->json();
+                return $this->formatRates($data['rates'] ?? []);
+            }
+
+        } catch (\Throwable $e) {
+            Log::error('Lỗi kết nối API tỷ giá hối đoái, sử dụng cấu hình dự phòng:', [
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        // Trả về dữ liệu dự phòng nếu mọi cuộc gọi đều thất bại
+        return $this->fallbackRates;
+    }
+
+    /**
      * Lấy tỷ giá chi tiết từ Vietcombank (Tiền mặt, Chuyển khoản, Bán ra).
-     * Áp dụng cơ chế Cache trong 12 giờ.
+     * Đọc trực tiếp từ Cache, nếu không có mới tải đồng bộ (với timeout ngắn).
      */
     public function getVcbRates(): array
     {
-        return Cache::remember('vcb_exchange_rates', 43200, function () {
-            try {
-                $response = Http::timeout(10)->get('https://portal.vietcombank.com.vn/Usercontrols/TVPortal.TyGia/pXML.aspx');
-                if ($response->successful()) {
-                    $xmlString = $response->body();
-                    $xml = simplexml_load_string($xmlString);
-                    if ($xml) {
-                        $vcbRates = [];
+        $vcbRates = Cache::get('vcb_exchange_rates');
+        if (!$vcbRates) {
+            $vcbRates = $this->fetchVcbRates();
+        }
+        return $vcbRates;
+    }
+
+    /**
+     * Tải trực tiếp tỷ giá từ API Vietcombank XML với timeout 3s.
+     */
+    public function fetchVcbRates(): array
+    {
+        try {
+            $response = Http::timeout(3)->get('https://portal.vietcombank.com.vn/Usercontrols/TVPortal.TyGia/pXML.aspx');
+            if ($response->successful()) {
+                $xmlString = $response->body();
+                $xml = simplexml_load_string($xmlString);
+                if ($xml) {
+                    $vcbRates = [];
+                    
+                    // Thêm VND làm cơ sở so sánh (tỷ lệ 1-1)
+                    $vcbRates['VND'] = [
+                        'currency_code' => 'VND',
+                        'currency_name' => 'VIETNAMESE DONG',
+                        'buy_cash' => 1.0,
+                        'buy_transfer' => 1.0,
+                        'sell' => 1.0,
+                        'mid' => 1.0,
+                        'buy_cash_fee_percent' => 0.0,
+                        'buy_transfer_fee_percent' => 0.0,
+                        'sell_fee_percent' => 0.0
+                    ];
+
+                    foreach ($xml->Exrate as $rate) {
+                        $code = strtoupper(trim((string)$rate['CurrencyCode']));
                         
-                        // Thêm VND làm cơ sở so sánh (tỷ lệ 1-1)
-                        $vcbRates['VND'] = [
-                            'currency_code' => 'VND',
-                            'currency_name' => 'VIETNAMESE DONG',
-                            'buy_cash' => 1.0,
-                            'buy_transfer' => 1.0,
-                            'sell' => 1.0,
-                            'mid' => 1.0,
-                            'buy_cash_fee_percent' => 0.0,
-                            'buy_transfer_fee_percent' => 0.0,
-                            'sell_fee_percent' => 0.0
-                        ];
-
-                        foreach ($xml->Exrate as $rate) {
-                            $code = strtoupper(trim((string)$rate['CurrencyCode']));
-                            
-                            // Chỉ lưu trữ các đồng ngoại tệ được hệ thống hỗ trợ
-                            if (!in_array($code, $this->supportedCurrencies)) {
-                                continue;
-                            }
-
-                            $name = trim((string)$rate['CurrencyName']);
-                            $buyCash = $this->parseFormattedNumber((string)$rate['Buy']);
-                            $buyTransfer = $this->parseFormattedNumber((string)$rate['Transfer']);
-                            $sell = $this->parseFormattedNumber((string)$rate['Sell']);
-
-                            // Fallback nếu không có tỷ giá mua tiền mặt (INR, KWD...)
-                            if ($buyCash <= 0 && $buyTransfer > 0) {
-                                $buyCash = $buyTransfer;
-                            }
-
-                            if ($buyTransfer > 0 && $sell > 0) {
-                                $mid = ($buyTransfer + $sell) / 2.0;
-                                $buyCashFee = $mid > 0 ? (($mid - $buyCash) / $mid) * 100.0 : 0.0;
-                                $buyTransferFee = $mid > 0 ? (($mid - $buyTransfer) / $mid) * 100.0 : 0.0;
-                                $sellFee = $mid > 0 ? (($sell - $mid) / $mid) * 100.0 : 0.0;
-
-                                $vcbRates[$code] = [
-                                    'currency_code' => $code,
-                                    'currency_name' => $name,
-                                    'buy_cash' => $buyCash,
-                                    'buy_transfer' => $buyTransfer,
-                                    'sell' => $sell,
-                                    'mid' => $mid,
-                                    'buy_cash_fee_percent' => round($buyCashFee, 3),
-                                    'buy_transfer_fee_percent' => round($buyTransferFee, 3),
-                                    'sell_fee_percent' => round($sellFee, 3)
-                                ];
-                            }
+                        // Chỉ lưu trữ các đồng ngoại tệ được hệ thống hỗ trợ
+                        if (!in_array($code, $this->supportedCurrencies)) {
+                            continue;
                         }
 
-                        if (count($vcbRates) > 1) { // Có thêm đồng ngoại tệ ngoài VND
-                            return $vcbRates;
+                        $name = trim((string)$rate['CurrencyName']);
+                        $buyCash = $this->parseFormattedNumber((string)$rate['Buy']);
+                        $buyTransfer = $this->parseFormattedNumber((string)$rate['Transfer']);
+                        $sell = $this->parseFormattedNumber((string)$rate['Sell']);
+
+                        // Fallback nếu không có tỷ giá mua tiền mặt (INR, KWD...)
+                        if ($buyCash <= 0 && $buyTransfer > 0) {
+                            $buyCash = $buyTransfer;
+                        }
+
+                        if ($buyTransfer > 0 && $sell > 0) {
+                            $mid = ($buyTransfer + $sell) / 2.0;
+                            $buyCashFee = $mid > 0 ? (($mid - $buyCash) / $mid) * 100.0 : 0.0;
+                            $buyTransferFee = $mid > 0 ? (($mid - $buyTransfer) / $mid) * 100.0 : 0.0;
+                            $sellFee = $mid > 0 ? (($sell - $mid) / $mid) * 100.0 : 0.0;
+
+                            $vcbRates[$code] = [
+                                'currency_code' => $code,
+                                'currency_name' => $name,
+                                'buy_cash' => $buyCash,
+                                'buy_transfer' => $buyTransfer,
+                                'sell' => $sell,
+                                'mid' => $mid,
+                                'buy_cash_fee_percent' => round($buyCashFee, 3),
+                                'buy_transfer_fee_percent' => round($buyTransferFee, 3),
+                                'sell_fee_percent' => round($sellFee, 3)
+                            ];
                         }
                     }
-                }
-            } catch (\Throwable $e) {
-                Log::error('Lỗi khi lấy dữ liệu tỷ giá Vietcombank: ' . $e->getMessage());
-            }
 
-            return $this->getMockVcbRates();
-        });
+                    if (count($vcbRates) > 1) { // Có thêm đồng ngoại tệ ngoài VND
+                        return $vcbRates;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error('Lỗi khi lấy dữ liệu tỷ giá Vietcombank: ' . $e->getMessage());
+        }
+
+        return $this->getMockVcbRates();
     }
 
     /**

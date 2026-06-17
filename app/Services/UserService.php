@@ -310,7 +310,7 @@ class UserService
         // === Google: Verify ID Token (JWT) ===
         if ($provider === 'google') {
             // Gọi Google tokeninfo API để xác minh ID Token
-            $response = Http::get("https://oauth2.googleapis.com/tokeninfo", [
+            $response = Http::timeout(5)->get("https://oauth2.googleapis.com/tokeninfo", [
                 'id_token' => $token,
             ]);
 
@@ -364,7 +364,7 @@ class UserService
                     $exchangeParams['redirect_uri'] = $redirectUri;
                 }
 
-                $exchangeResponse = Http::asJson()->acceptJson()->post("https://github.com/login/oauth/access_token", $exchangeParams);
+                $exchangeResponse = Http::asJson()->acceptJson()->timeout(5)->post("https://github.com/login/oauth/access_token", $exchangeParams);
 
                 if ($exchangeResponse->successful() && $exchangeResponse->json('access_token')) {
                     $accessToken = $exchangeResponse->json('access_token');
@@ -374,7 +374,7 @@ class UserService
             }
 
             // GitHub sử dụng Access Token để lấy user info
-            $response = Http::withToken($accessToken)->get("https://api.github.com/user");
+            $response = Http::withToken($accessToken)->timeout(5)->get("https://api.github.com/user");
             
             if ($response->failed()) {
                 throw new \Exception(__('messages.github_token_invalid'));
@@ -384,7 +384,7 @@ class UserService
             
             // Trường hợp email bị ẩn (private) trên GitHub
             if (!$email) {
-                $emailsResponse = Http::withToken($accessToken)->get("https://api.github.com/user/emails");
+                $emailsResponse = Http::withToken($accessToken)->timeout(5)->get("https://api.github.com/user/emails");
                 if ($emailsResponse->successful()) {
                     foreach ($emailsResponse->json() as $emailData) {
                         if ($emailData['primary'] && $emailData['verified']) {

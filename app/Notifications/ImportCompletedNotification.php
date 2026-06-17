@@ -3,11 +3,12 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use App\Channels\CustomDbChannel;
 
-class ImportCompletedNotification extends Notification
+class ImportCompletedNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -24,6 +25,7 @@ class ImportCompletedNotification extends Notification
         $this->failedRows = $failedRows;
         $this->totalRows = $totalRows;
         $this->errorFileUrl = $errorFileUrl;
+        $this->afterCommit = true;
     }
 
     /**

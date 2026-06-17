@@ -121,6 +121,7 @@ class FcmService
 
                 $response = Http::withToken($accessToken)
                     ->acceptJson()
+                    ->timeout(5)
                     ->post($url, $payload);
 
                 if ($response->successful()) {

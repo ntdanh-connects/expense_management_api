@@ -4,10 +4,11 @@ namespace App\Notifications;
 
 use App\Models\Budget;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class BudgetWarningNotification extends Notification
+class BudgetWarningNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -20,6 +21,7 @@ class BudgetWarningNotification extends Notification
         $this->budget = $budget;
         $this->thresholdPercent = $thresholdPercent;
         $this->usedAmount = $usedAmount;
+        $this->afterCommit = true;
     }
 
     /**

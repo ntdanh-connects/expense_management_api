@@ -154,7 +154,7 @@ class AiChatController extends Controller
         ];
 
         try {
-            $response = Http::post($url, $payload);
+            $response = Http::timeout(15)->post($url, $payload);
             
             if ($response->failed()) {
                 return response()->json([
@@ -231,7 +231,7 @@ class AiChatController extends Controller
                     ]
                 ];
 
-                $finalResponse = Http::post($url, $finalPayload);
+                $finalResponse = Http::timeout(15)->post($url, $finalPayload);
 
                 if ($finalResponse->failed()) {
                     return response()->json([

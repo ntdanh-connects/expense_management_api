@@ -35,4 +35,6 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('notification:daily-reminder')->dailyAt('21:00');
         // Gửi báo cáo chi tiêu tuần vào lúc 20:00 ngày Chủ Nhật
         $schedule->command('notification:weekly-summary')->sundays()->at('20:00');
+        // Cập nhật tỷ giá hối đoái ngầm từ Vietcombank & Frankfurter mỗi giờ
+        $schedule->command('rates:update')->hourly();
     })->create();

@@ -8,7 +8,7 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\URL;
 
-class VerifyEmailNotification extends Notification
+class VerifyEmailNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -17,6 +17,7 @@ class VerifyEmailNotification extends Notification
     public function __construct($user)
     {
         $this->user = $user;
+        $this->afterCommit = true;
     }
 
     /**

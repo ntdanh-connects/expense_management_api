@@ -3,11 +3,12 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use App\Channels\CustomDbChannel;
 
-class WeeklySummaryNotification extends Notification
+class WeeklySummaryNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -24,6 +25,7 @@ class WeeklySummaryNotification extends Notification
         $this->income = $income;
         $this->expense = $expense;
         $this->categoriesBreakdown = $categoriesBreakdown;
+        $this->afterCommit = true;
     }
 
     /**

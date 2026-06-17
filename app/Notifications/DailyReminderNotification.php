@@ -3,17 +3,18 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use App\Channels\CustomDbChannel;
 
-class DailyReminderNotification extends Notification
+class DailyReminderNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
     public function __construct()
     {
-        //
+        $this->afterCommit = true;
     }
 
     /**
