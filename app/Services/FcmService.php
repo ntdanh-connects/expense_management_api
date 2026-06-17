@@ -23,24 +23,38 @@ class FcmService
     protected function getAccessToken(): ?string
     {
         try {
-            $path = $this->credentialsPath;
-            if (!$path) {
-                Log::warning('FCM: Đường dẫn Firebase credentials chưa được cấu hình.');
+            $credentials = $this->credentialsPath;
+            if (!$credentials) {
+                Log::warning('FCM: Firebase credentials chưa được cấu hình.');
                 return null;
             }
 
-            // Giải quyết đường dẫn tương đối hoặc tuyệt đối
-            if (!file_exists($path)) {
-                if (file_exists(base_path($path))) {
-                    $path = base_path($path);
-                } else {
-                    Log::warning("FCM: Không tìm thấy file credentials tại: {$path}");
+            $client = new GoogleClient();
+
+            // 1. Kiểm tra xem credentials có phải là chuỗi JSON trực tiếp không
+            $jsonData = json_decode($credentials, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($jsonData)) {
+                $client->setAuthConfig($jsonData);
+            } else {
+                // 2. Nếu không phải JSON, coi đó là đường dẫn file
+                $path = $credentials;
+                if (!file_exists($path)) {
+                    if (file_exists(base_path($path))) {
+                        $path = base_path($path);
+                    } else {
+                        Log::warning("FCM: Không tìm thấy file credentials tại: {$path}");
+                        return null;
+                    }
+                }
+
+                if (!is_readable($path)) {
+                    Log::warning("FCM: File credentials tại {$path} tồn tại nhưng không có quyền đọc (Permission denied).");
                     return null;
                 }
+
+                $client->setAuthConfig($path);
             }
 
-            $client = new GoogleClient();
-            $client->setAuthConfig($path);
             $client->addScope('https://www.googleapis.com/auth/firebase.messaging');
             $client->refreshTokenWithAssertion();
             
