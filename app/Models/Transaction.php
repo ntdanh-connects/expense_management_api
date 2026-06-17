@@ -43,7 +43,7 @@ class Transaction extends Model
         'transaction_date' => 'datetime',
     ];
 
-    protected $appends = ['is_transfer_locked', 'sender'];
+    protected $appends = [];
 
     protected static function booted()
     {

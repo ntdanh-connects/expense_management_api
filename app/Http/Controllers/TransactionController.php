@@ -118,6 +118,7 @@ class TransactionController extends Controller
             }
  
             $transaction = $this->transactionService->createTransaction($userId, $validated, $request->file('attachment'), $request->file('attachments'));
+            $transaction->append(['is_transfer_locked', 'sender']);
 
             return response()->json([
                 'status'  => 'success',
@@ -142,6 +143,7 @@ class TransactionController extends Controller
             }
 
             $transaction = $this->transactionService->getTransactionById($id, $userId);
+            $transaction->append(['is_transfer_locked', 'sender']);
 
             return response()->json([
                 'status'  => 'success',
@@ -217,6 +219,7 @@ class TransactionController extends Controller
             }
  
             $transaction = $this->transactionService->updateTransaction($id, $userId, $validated, $request->file('attachment'), $request->file('attachments'));
+            $transaction->append(['is_transfer_locked', 'sender']);
 
             return response()->json([
                 'status'  => 'success',
