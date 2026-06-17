@@ -291,4 +291,89 @@ class FcmPushNotificationTest extends TestCase
         
         $user->notify($notification);
     }
+
+    /**
+     * Test channels selected when both email and push notifications are enabled.
+     */
+    public function test_p2p_transfer_received_notification_channels_both_enabled()
+    {
+        \Illuminate\Support\Facades\Notification::fake();
+
+        $user = User::find($this->userId);
+
+        DB::table('notification_preferences')->where('user_id', $this->userId)->update([
+            'email_enabled' => true,
+            'push_enabled' => true,
+        ]);
+
+        $notification = new \App\Notifications\P2pTransferReceivedNotification('Sender A', 100000.00, 'VND', 'Chuyển tiền');
+        $user->notify($notification);
+
+        \Illuminate\Support\Facades\Notification::assertSentTo(
+            $user,
+            \App\Notifications\P2pTransferReceivedNotification::class,
+            function ($notif, $channels) {
+                return in_array('mail', $channels) 
+                    && in_array(\App\Channels\FcmChannel::class, $channels)
+                    && in_array(\App\Channels\CustomDbChannel::class, $channels);
+            }
+        );
+    }
+
+    /**
+     * Test channels selected when only push notification is enabled.
+     */
+    public function test_p2p_transfer_received_notification_channels_only_push()
+    {
+        \Illuminate\Support\Facades\Notification::fake();
+
+        $user = User::find($this->userId);
+
+        DB::table('notification_preferences')->where('user_id', $this->userId)->update([
+            'email_enabled' => false,
+            'push_enabled' => true,
+        ]);
+
+        $notification = new \App\Notifications\P2pTransferReceivedNotification('Sender A', 100000.00, 'VND', 'Chuyển tiền');
+        $user->notify($notification);
+
+        \Illuminate\Support\Facades\Notification::assertSentTo(
+            $user,
+            \App\Notifications\P2pTransferReceivedNotification::class,
+            function ($notif, $channels) {
+                return !in_array('mail', $channels) 
+                    && in_array(\App\Channels\FcmChannel::class, $channels)
+                    && in_array(\App\Channels\CustomDbChannel::class, $channels);
+            }
+        );
+    }
+
+    /**
+     * Test channels selected when only email notification is enabled.
+     */
+    public function test_p2p_transfer_received_notification_channels_only_email()
+    {
+        \Illuminate\Support\Facades\Notification::fake();
+
+        $user = User::find($this->userId);
+
+        DB::table('notification_preferences')->where('user_id', $this->userId)->update([
+            'email_enabled' => true,
+            'push_enabled' => false,
+        ]);
+
+        $notification = new \App\Notifications\P2pTransferReceivedNotification('Sender A', 100000.00, 'VND', 'Chuyển tiền');
+        $user->notify($notification);
+
+        \Illuminate\Support\Facades\Notification::assertSentTo(
+            $user,
+            \App\Notifications\P2pTransferReceivedNotification::class,
+            function ($notif, $channels) {
+                return in_array('mail', $channels) 
+                    && !in_array(\App\Channels\FcmChannel::class, $channels)
+                    && in_array(\App\Channels\CustomDbChannel::class, $channels);
+            }
+        );
+    }
 }
+

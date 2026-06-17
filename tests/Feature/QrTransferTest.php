@@ -31,8 +31,8 @@ class QrTransferTest extends TestCase
         DB::table('wallets')->insert([
             'id' => $this->walletId,
             'user_id' => $this->userId,
-            'name' => 'Ví Tiền Mặt',
-            'type' => 'cash',
+            'name' => 'Ví Ngân Hàng',
+            'type' => 'bank',
             'currency_code' => 'VND',
             'is_hidden' => false,
             'created_at' => now(),
@@ -146,6 +146,7 @@ class QrTransferTest extends TestCase
         $qrPayload = json_encode([
             'type' => 'internal',
             'identifier' => 'USR999999',
+            'wallet_id' => $recipientWalletId,
             'amount' => 50000,
             'description' => 'Test QR Transfer'
         ]);
@@ -160,6 +161,7 @@ class QrTransferTest extends TestCase
         $response->assertJsonPath('data.type', 'internal');
         $response->assertJsonPath('data.payee_name', 'Recipient User');
         $response->assertJsonPath('data.identifier', 'USR999999');
+        $response->assertJsonPath('data.to_wallet_id', $recipientWalletId);
         $response->assertJsonPath('data.amount', 50000);
  
         // Check saved payee in DB
@@ -252,8 +254,8 @@ class QrTransferTest extends TestCase
         DB::table('wallets')->insert([
             'id' => $recipientWalletId,
             'user_id' => $recipientId,
-            'name' => 'Ví Tiền Mặt Recipient 2',
-            'type' => 'cash',
+            'name' => 'Ví Ngân Hàng Recipient 2',
+            'type' => 'bank',
             'currency_code' => 'VND',
             'is_hidden' => false,
             'created_at' => now(),

@@ -410,7 +410,7 @@ class BudgetTest extends TestCase
         ]);
         $budget = Budget::where('user_id', $this->userId)->first();
 
-        // 2. Tạo một giao dịch chi tiêu 10 USD (Tỷ giá USD/VND ~25400đ, chốt VND là 254.000đ)
+        // 2. Tạo một giao dịch chi tiêu 10 USD (Tỷ giá USD/VND của Vietcombank là 26113đ, chốt VND là 261.130đ)
         $this->postJson('/api/transactions', [
             'wallet_id' => $this->walletId,
             'category_id' => $this->categoryId,
@@ -419,20 +419,20 @@ class BudgetTest extends TestCase
             'title' => 'Ăn trưa nước ngoài',
             'transaction_date' => '2026-06-15 12:00:00',
             'currency_code' => 'USD',
-            'exchange_rate' => 25400.000000
+            'exchange_rate' => 26113.000000
         ], [
             'Authorization' => 'Bearer ' . $this->token
         ]);
 
-        // Kiểm tra trước khi đổi: amount_in_user_currency của giao dịch là 254.000đ (VND), ngân sách đã dùng là 254.000đ
+        // Kiểm tra trước khi đổi: amount_in_user_currency của giao dịch là 261.130đ (VND), ngân sách đã dùng là 261.130đ
         $this->assertDatabaseHas('transactions', [
             'user_id' => $this->userId,
             'amount' => 10.00,
-            'amount_in_user_currency' => 254000.00
+            'amount_in_user_currency' => 261130.00
         ]);
         $this->assertDatabaseHas('budget_usages', [
             'budget_id' => $budget->id,
-            'used_amount' => 254000.00
+            'used_amount' => 261130.00
         ]);
 
         // 3. Đổi Preferred Currency của user sang USD
@@ -458,4 +458,172 @@ class BudgetTest extends TestCase
             'used_amount' => 10.00
         ]);
     }
+
+    /**
+     * Test 8: Không được phép tạo giao dịch thủ công với danh mục thu nhập khi dùng ví ngân hàng/ví điện tử
+     */
+    public function test_api_creates_manual_transaction_with_income_category_fails()
+    {
+        // 1. Tạo ví Ngân Hàng
+        $bankWalletId = (string) Str::uuid7();
+        DB::table('wallets')->insert([
+            'id' => $bankWalletId,
+            'user_id' => $this->userId,
+            'name' => 'Ví Ngân Hàng Test',
+            'type' => 'bank',
+            'currency_code' => 'VND',
+            'is_hidden' => false,
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+        DB::table('wallet_balances')->insert([
+            'wallet_id' => $bankWalletId,
+            'available_balance' => 5000000.00,
+            'version' => 1,
+            'updated_at' => now()
+        ]);
+
+        // 2. Tạo một danh mục thu nhập
+        $incomeCategoryId = (string) Str::uuid7();
+        DB::table('categories')->insert([
+            'id' => $incomeCategoryId,
+            'user_id' => null,
+            'parent_id' => null,
+            'type' => 'income',
+            'name' => 'Lương',
+            'is_default' => true,
+            'sort_order' => 2,
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        // 3. Tạo người hưởng thụ (bắt buộc đối với ví bank thủ công)
+        $payeeId = (string) Str::uuid7();
+        DB::table('saved_payees')->insert([
+            'id' => $payeeId,
+            'user_id' => $this->userId,
+            'payee_type' => 'external',
+            'identifier' => '123456789',
+            'payee_name' => 'Recipient Test',
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        $response = $this->postJson('/api/transactions', [
+            'wallet_id' => $bankWalletId,
+            'category_id' => $incomeCategoryId,
+            'payee_id' => $payeeId,
+            'type' => 'expense',
+            'amount' => 100000.00,
+            'title' => 'Chuyển tiền lương lỗi',
+            'transaction_date' => '2026-06-15 12:00:00',
+            'currency_code' => 'VND'
+        ], [
+            'Authorization' => 'Bearer ' . $this->token
+        ]);
+
+        $response->assertStatus(400);
+        $response->assertJsonPath('message', __('messages.manual_transaction_no_income_category'));
+    }
+
+    /**
+     * Test 9: Tạo giao dịch thủ công qua ngân hàng/ví điện tử đến người thụ hưởng nội bộ sẽ tự động thực hiện P2P transfer
+     */
+    public function test_api_creates_manual_transaction_to_internal_payee_performs_p2p_transfer()
+    {
+        // 1. Tạo ví Ngân Hàng của người gửi
+        $senderWalletId = (string) Str::uuid7();
+        DB::table('wallets')->insert([
+            'id' => $senderWalletId,
+            'user_id' => $this->userId,
+            'name' => 'Ví Gửi Ngân Hàng',
+            'type' => 'bank',
+            'currency_code' => 'VND',
+            'is_hidden' => false,
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+        DB::table('wallet_balances')->insert([
+            'wallet_id' => $senderWalletId,
+            'available_balance' => 1000000.00,
+            'version' => 1,
+            'updated_at' => now()
+        ]);
+
+        // 2. Tạo ví nhận của người nhận (internal user)
+        $recipientId = (string) Str::uuid7();
+        DB::table('users')->insert([
+            'user_id' => $recipientId,
+            'email' => 'recipient_' . uniqid() . '@example.com',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+        $recipientWalletId = (string) Str::uuid7();
+        DB::table('wallets')->insert([
+            'id' => $recipientWalletId,
+            'user_id' => $recipientId,
+            'name' => 'Ví Nhận Ngân Hàng',
+            'type' => 'bank',
+            'currency_code' => 'VND',
+            'is_hidden' => false,
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+        DB::table('wallet_balances')->insert([
+            'wallet_id' => $recipientWalletId,
+            'available_balance' => 0.00,
+            'version' => 1,
+            'updated_at' => now()
+        ]);
+
+        // 3. Tạo payee nội bộ
+        $payeeId = (string) Str::uuid7();
+        DB::table('saved_payees')->insert([
+            'id' => $payeeId,
+            'user_id' => $this->userId,
+            'payee_type' => 'internal',
+            'payee_user_id' => $recipientId,
+            'identifier' => 'rec_123',
+            'payee_name' => 'Recipient Name',
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        // 4. Tạo giao dịch thủ công chi tiêu 100.000đ từ ví người gửi tới payee nội bộ
+        $response = $this->postJson('/api/transactions', [
+            'wallet_id' => $senderWalletId,
+            'category_id' => $this->categoryId,
+            'payee_id' => $payeeId,
+            'type' => 'expense',
+            'amount' => 100000.00,
+            'title' => 'Chuyển tiền thủ công cho A',
+            'transaction_date' => '2026-06-15 12:00:00',
+            'currency_code' => 'VND'
+        ], [
+            'Authorization' => 'Bearer ' . $this->token
+        ]);
+
+        $response->assertStatus(201);
+
+        // 5. Kiểm tra số dư người gửi bị trừ, số dư người nhận được cộng
+        $this->assertDatabaseHas('wallet_balances', [
+            'wallet_id' => $senderWalletId,
+            'available_balance' => 900000.00
+        ]);
+        $this->assertDatabaseHas('wallet_balances', [
+            'wallet_id' => $recipientWalletId,
+            'available_balance' => 100000.00
+        ]);
+
+        // 6. Kiểm tra giao dịch income được tạo cho người nhận
+        $this->assertDatabaseHas('transactions', [
+            'user_id' => $recipientId,
+            'wallet_id' => $recipientWalletId,
+            'type' => 'income',
+            'amount' => 100000.00
+        ]);
+    }
 }
+
+

@@ -51,8 +51,8 @@ class RecurringTransactionTest extends TestCase
         DB::table('wallets')->insert([
             'id' => $this->walletId,
             'user_id' => $this->userId,
-            'name' => 'Ví Tiền Mặt',
-            'type' => 'cash',
+            'name' => 'Ví Ngân Hàng',
+            'type' => 'bank',
             'currency_code' => 'VND',
             'is_hidden' => false,
             'created_at' => now(),
@@ -369,11 +369,30 @@ class RecurringTransactionTest extends TestCase
         Notification::fake();
         Carbon::setTestNow('2026-06-08 10:00:00');
 
+        // Giao dịch thủ công yêu cầu ví Tiền mặt (cash)
+        $cashWalletId = (string) Str::uuid7();
+        DB::table('wallets')->insert([
+            'id' => $cashWalletId,
+            'user_id' => $this->userId,
+            'name' => 'Ví Tiền Mặt Test',
+            'type' => 'cash',
+            'currency_code' => 'VND',
+            'is_hidden' => false,
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+        DB::table('wallet_balances')->insert([
+            'wallet_id' => $cashWalletId,
+            'available_balance' => 500000.00,
+            'version' => 1,
+            'updated_at' => now()
+        ]);
+
         // 1. Tạo giao dịch đã được tự động chạy từ scheduler ngày hôm nay
         DB::table('transactions')->insert([
             'id' => (string) Str::uuid7(),
             'user_id' => $this->userId,
-            'wallet_id' => $this->walletId,
+            'wallet_id' => $cashWalletId,
             'category_id' => $this->categoryId,
             'type' => 'expense',
             'amount' => 120000.00,
@@ -389,7 +408,7 @@ class RecurringTransactionTest extends TestCase
 
         // 2. Thử tạo thủ công giao dịch y hệt thông qua API
         $response = $this->postJson('/api/transactions', [
-            'wallet_id' => $this->walletId,
+            'wallet_id' => $cashWalletId,
             'category_id' => $this->categoryId,
             'type' => 'expense',
             'amount' => 120000.00,
@@ -405,4 +424,41 @@ class RecurringTransactionTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    /**
+     * Test 7: Không được phép tạo luật định kỳ với danh mục thu nhập khi dùng ví ngân hàng/ví điện tử
+     */
+    public function test_api_creates_recurring_rule_with_income_category_fails()
+    {
+        // 1. Tạo một danh mục thu nhập
+        $incomeCategoryId = (string) Str::uuid7();
+        DB::table('categories')->insert([
+            'id' => $incomeCategoryId,
+            'user_id' => null,
+            'parent_id' => null,
+            'type' => 'income',
+            'name' => 'Lương',
+            'is_default' => true,
+            'sort_order' => 2,
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        $response = $this->postJson('/api/recurring-rules', [
+            'wallet_id' => $this->walletId, // ví Ngân Hàng (type: bank)
+            'category_id' => $incomeCategoryId,
+            'type' => 'expense',
+            'amount' => 150000.00,
+            'title' => 'Đăng ký Netflix',
+            'frequency' => 'monthly',
+            'interval_value' => 1,
+            'next_run_at' => '2026-06-15 12:00:00'
+        ], [
+            'Authorization' => 'Bearer ' . $this->token
+        ]);
+
+        $response->assertStatus(400);
+        $response->assertJsonPath('message', __('messages.recurring_rule_no_income_category'));
+    }
 }
+

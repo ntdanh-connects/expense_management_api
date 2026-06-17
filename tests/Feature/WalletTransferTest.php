@@ -45,14 +45,14 @@ class WalletTransferTest extends TestCase
             'updated_at' => now()
         ]);
 
-        // 3. Tạo ví 2 (USD)
+        // 3. Tạo ví 2 (VND)
         $this->wallet2Id = (string) Str::uuid7();
         DB::table('wallets')->insert([
             'id' => $this->wallet2Id,
             'user_id' => $this->userId,
-            'name' => 'Ví USD Saving',
+            'name' => 'Ví VND Saving',
             'type' => 'bank',
-            'currency_code' => 'USD',
+            'currency_code' => 'VND',
             'is_hidden' => false,
             'created_at' => now(),
             'updated_at' => now()
@@ -178,10 +178,10 @@ class WalletTransferTest extends TestCase
         $this->assertNotNull($incomeTx);
         $this->assertEquals('income', $incomeTx->type);
         $this->assertEquals('transfer', $incomeTx->source_type);
-        // Tỷ giá VND -> USD là 0.00004 -> amount nhận được là 100000 * 0.00004 = 4.00 USD
-        $this->assertEquals(4.00, (float)$incomeTx->amount);
-        $this->assertEquals('USD', $incomeTx->currency_code);
-        // Do userCurrency = VND và ví đích là USD -> amount_in_user_currency phải được quy đổi ngược từ USD sang VND: 4.00 * 25000 = 100000.00
+        // Tỷ giá VND -> VND là 1.0 -> amount nhận được là 100000 VND
+        $this->assertEquals(100000.00, (float)$incomeTx->amount);
+        $this->assertEquals('VND', $incomeTx->currency_code);
+        // Do cùng là VND -> amount_in_user_currency phải bằng 100000.00
         $this->assertEquals(100000.00, (float)$incomeTx->amount_in_user_currency);
     }
 
