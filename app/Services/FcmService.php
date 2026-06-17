@@ -31,10 +31,12 @@ class FcmService
 
             $client = new GoogleClient();
 
+            $jsonData = null;
+
             // 1. Kiểm tra xem credentials có phải là chuỗi JSON trực tiếp không
-            $jsonData = json_decode($credentials, true);
-            if (json_last_error() === JSON_ERROR_NONE && is_array($jsonData)) {
-                $client->setAuthConfig($jsonData);
+            $decoded = json_decode($credentials, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $jsonData = $decoded;
             } else {
                 // 2. Nếu không phải JSON, coi đó là đường dẫn file
                 $path = $credentials;
@@ -52,8 +54,21 @@ class FcmService
                     return null;
                 }
 
-                $client->setAuthConfig($path);
+                $fileContent = file_get_contents($path);
+                $jsonData = json_decode($fileContent, true);
             }
+
+            if (!is_array($jsonData)) {
+                Log::warning("FCM: Định dạng credentials không hợp lệ (không phải JSON hợp lệ).");
+                return null;
+            }
+
+            // Tự động sửa lỗi private_key chứa kí tự \n viết thường thay vì xuống dòng thực tế (do bị escape)
+            if (isset($jsonData['private_key'])) {
+                $jsonData['private_key'] = str_replace('\n', "\n", $jsonData['private_key']);
+            }
+
+            $client->setAuthConfig($jsonData);
 
             $client->addScope('https://www.googleapis.com/auth/firebase.messaging');
             $client->refreshTokenWithAssertion();
