@@ -8,12 +8,14 @@
     "require": {
         "php": "^8.3",
         "ext-bcmath": "*",
+        "barryvdh/laravel-dompdf": "*",
         "google/apiclient": "^2.19",
         "laravel/framework": "^13.8",
         "laravel/sanctum": "^4.0",
         "laravel/socialite": "^5.27",
         "laravel/tinker": "^3.0",
         "league/flysystem-aws-s3-v3": "^3.0",
+        "phpoffice/phpspreadsheet": "*",
         "predis/predis": "^3.4",
         "pusher/pusher-php-server": "*",
         "resend/resend-laravel": "^1.4"
