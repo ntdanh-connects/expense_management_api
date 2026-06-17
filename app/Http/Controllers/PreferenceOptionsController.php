@@ -97,13 +97,15 @@ class PreferenceOptionsController extends Controller
     {
         try {
             $rates = $this->exchangeRateService->getLatestRates();
+            $vcbRates = $this->exchangeRateService->getVcbRates();
 
             return response()->json([
                 'status'  => 'success',
                 'message' => 'Lấy danh sách tỷ giá hối đoái mới nhất thành công!',
                 'data'    => [
                     'base'  => 'USD',
-                    'rates' => $rates
+                    'rates' => $rates,
+                    'vcb_rates' => $vcbRates
                 ]
             ], 200);
 
