@@ -11,6 +11,11 @@ use Illuminate\Support\Carbon;
 use App\Models\User;
 use App\Models\ReportExport;
 use Illuminate\Support\Facades\Notification;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 
 class ExportTransactionsJob implements ShouldQueue
 {
@@ -85,54 +90,101 @@ class ExportTransactionsJob implements ShouldQueue
                 'transactions.status'
             )->orderBy('transactions.transaction_date', 'desc')->get();
 
-            // 3. Tạo file CSV
-            $tempStream = fopen('php://temp', 'r+');
-            
-            // UTF-8 BOM để Excel đọc đúng tiếng Việt có dấu
-            fprintf($tempStream, chr(0xEF).chr(0xBB).chr(0xBF));
+            // 3. Tạo file Excel (.xlsx) sử dụng PhpSpreadsheet
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Giao dịch');
 
             // Viết Headers
-            fputcsv($tempStream, [
+            $headers = [
                 'Mã Giao Dịch', 
                 'Ngày Giao Dịch', 
                 'Loại Giao Dịch', 
                 'Số Tiền', 
                 'Đơn Vị', 
-                'Số Tiền Quy Đổi', 
                 'Ví', 
                 'Danh Mục', 
                 'Tiêu Đề', 
                 'Ghi Chú', 
                 'Trạng Thái'
-            ]);
+            ];
 
-            // Viết Dữ liệu
-            foreach ($transactions as $tx) {
-                fputcsv($tempStream, [
-                    $tx->id,
-                    Carbon::parse($tx->transaction_date)->toDateTimeString(),
-                    $tx->type === 'income' ? 'Thu nhập' : 'Chi tiêu',
-                    (float) $tx->amount,
-                    $tx->currency_code,
-                    (float) $tx->amount_in_user_currency,
-                    $tx->wallet_name ?? 'Ví đã xóa',
-                    $tx->category_name ?? 'Không phân mục',
-                    $tx->title,
-                    $tx->notes,
-                    $tx->status
-                ]);
+            $colIndex = 1;
+            foreach ($headers as $header) {
+                $sheet->setCellValue([$colIndex, 1], $header);
+                $colIndex++;
             }
 
-            rewind($tempStream);
-            $csvContent = stream_get_contents($tempStream);
-            fclose($tempStream);
+            // Viết Dữ liệu
+            $rowIndex = 2;
+            foreach ($transactions as $tx) {
+                $sheet->setCellValue([1, $rowIndex], $tx->id);
+                $sheet->setCellValue([2, $rowIndex], Carbon::parse($tx->transaction_date)->toDateTimeString());
+                $sheet->setCellValue([3, $rowIndex], $tx->type === 'income' ? 'Thu nhập' : 'Chi tiêu');
+                $sheet->setCellValue([4, $rowIndex], (float) $tx->amount);
+                $sheet->setCellValue([5, $rowIndex], $tx->currency_code);
+                $sheet->setCellValue([6, $rowIndex], $tx->wallet_name ?? 'Ví đã xóa');
+                $sheet->setCellValue([7, $rowIndex], $tx->category_name ?? 'Không phân mục');
+                
+                // Tiêu đề & Ghi chú ép kiểu string tường minh
+                $sheet->setCellValueExplicit([8, $rowIndex], $tx->title ?? '', DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit([9, $rowIndex], $tx->notes ?? '', DataType::TYPE_STRING);
+                
+                $sheet->setCellValue([10, $rowIndex], $tx->status);
+                $rowIndex++;
+            }
+
+            $totalRows = $rowIndex - 1;
+
+            // --- Cấu hình Styling đẹp cho file Excel ---
+            // 1. Phần tiêu đề của tất cả các cột căn giữa, in đậm và chữ to lên (font size 12)
+            $headerRange = 'A1:J1';
+            $sheet->getStyle($headerRange)->getFont()->setBold(true)->setSize(12);
+            $sheet->getStyle($headerRange)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+            if ($totalRows >= 2) {
+                // 2. Cột ngày giao dịch, loại giao dịch, số tiền, đơn vị, ví, trạng thái căn giữa
+                // Tương ứng cột B, C, D, E, F, J
+                $centerCols = ['B', 'C', 'D', 'E', 'F', 'J'];
+                foreach ($centerCols as $col) {
+                    $sheet->getStyle("{$col}2:{$col}{$totalRows}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                }
+
+                // 3. Phần tiền hiện format tiền việt (Cột D)
+                $sheet->getStyle("D2:D{$totalRows}")
+                    ->getNumberFormat()
+                    ->setFormatCode('#,##0" ₫"');
+
+                // 4. Tô viền các ô dữ liệu (Thin border)
+                $borderStyle = [
+                    'borders' => [
+                        'allBorders' => [
+                            'borderStyle' => Border::BORDER_THIN,
+                            'color' => ['argb' => 'D0D0D0'],
+                        ],
+                    ],
+                ];
+                $sheet->getStyle("A1:J{$totalRows}")->applyFromArray($borderStyle);
+            }
+
+            // Tự động điều chỉnh độ rộng cột
+            foreach (range('A', 'J') as $columnID) {
+                $sheet->getColumnDimension($columnID)->setAutoSize(true);
+            }
+
+            // Render Excel content
+            $writer = new Xlsx($spreadsheet);
+            ob_start();
+            $writer->save('php://output');
+            $excelContent = ob_get_clean();
+            $spreadsheet->disconnectCells();
 
             // 4. Lưu file lên S3 / Local Disk
-            $filename = "exports/{$this->userId}/transactions_{$this->exportId}.csv";
+            $filename = "exports/{$this->userId}/transactions_{$this->exportId}.xlsx";
             $diskName = config('filesystems.default') === 's3' ? 's3' : 'public';
             $disk = Storage::disk($diskName);
             
-            $disk->put($filename, $csvContent);
+            $disk->put($filename, $excelContent);
             
             if ($diskName === 's3') {
                 $fileUrl = $disk->temporaryUrl($filename, now()->addDays(7));
