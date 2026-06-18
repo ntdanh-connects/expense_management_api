@@ -33,7 +33,20 @@ class ImportCompletedNotification extends Notification implements ShouldQueue
      */
     public function via(object $notifiable): array
     {
-        return ['mail', CustomDbChannel::class];
+        $channels = [CustomDbChannel::class];
+
+        $preference = $notifiable->notificationPreference;
+        $emailEnabled = $preference ? $preference->email_enabled : true;
+        $pushEnabled = $preference ? $preference->push_enabled : true;
+
+        if ($emailEnabled) {
+            $channels[] = 'mail';
+        }
+        if ($pushEnabled) {
+            $channels[] = \App\Channels\FcmChannel::class;
+        }
+
+        return $channels;
     }
 
     /**
@@ -76,6 +89,24 @@ class ImportCompletedNotification extends Notification implements ShouldQueue
             'status' => $this->failedRows === 0 ? 'success' : ($this->successRows === 0 ? 'failed' : 'warning'),
             'title' => 'Nhập giao dịch hoàn tất',
             'message' => $message
+        ];
+    }
+
+    /**
+     * Get the FCM representation of the notification.
+     */
+    public function toFcm(object $notifiable): array
+    {
+        $title = '📥 Nhập giao dịch hoàn tất';
+        $body = "Nhập dữ liệu thành công {$this->successRows}/{$this->totalRows} giao dịch.";
+        if ($this->failedRows > 0) {
+            $body .= " Có {$this->failedRows} dòng lỗi.";
+        }
+
+        return [
+            'title' => $title,
+            'body' => $body,
+            'data' => $this->toArray($notifiable)
         ];
     }
 }
