@@ -23,6 +23,7 @@ class UserRepository extends BaseRepository implements UserRepositoryInterface {
         return DB::table('user_sessions')
             ->where('user_id',$userId)
             ->where('expired_at','>',now())
+            ->whereNull('revoked_at')
             ->where('refresh_token_hash',$hashedToken)
             ->first();
     }
