@@ -21,36 +21,11 @@ class PreferenceOptionsController extends Controller
     public function getOptions(Request $request): JsonResponse
     {
         try {
-            // Định nghĩa chi tiết các đồng tiền được hỗ trợ kèm ký hiệu hiển thị
             $currencies = [
                 [
                     'code'    => 'VND',
                     'name'    => 'Việt Nam Đồng',
                     'symbol'  => '₫',
-                    'decimal' => 0
-                ],
-                [
-                    'code'    => 'USD',
-                    'name'    => 'Đô la Mỹ',
-                    'symbol'  => '$',
-                    'decimal' => 2
-                ],
-                [
-                    'code'    => 'EUR',
-                    'name'    => 'Euro',
-                    'symbol'  => '€',
-                    'decimal' => 2
-                ],
-                [
-                    'code'    => 'GBP',
-                    'name'    => 'Bảng Anh',
-                    'symbol'  => '£',
-                    'decimal' => 2
-                ],
-                [
-                    'code'    => 'JPY',
-                    'name'    => 'Yên Nhật',
-                    'symbol'  => '¥',
                     'decimal' => 0
                 ]
             ];

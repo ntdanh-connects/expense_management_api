@@ -53,7 +53,7 @@ class WalletController extends Controller {
                 'icon'              => 'nullable|string',
                 'color'             => 'nullable|string',
                 'is_hidden'         => 'nullable|boolean',
-                'currency_code'     => 'nullable|string|in:VND,USD,EUR,GBP,JPY',
+                'currency_code'     => 'nullable|string|in:VND',
                 'available_balance' => ['nullable', 'string', 'regex:/^\d+(\.\d{1,2})?$/'] // Hứng số dư nạp vào bảng phụ
             ]);
 
@@ -85,7 +85,7 @@ class WalletController extends Controller {
                 'icon'          => 'nullable|string',
                 'color'         => 'nullable|string',
                 'is_hidden'     => 'nullable|boolean',
-                'currency_code' => 'sometimes|required|string|in:VND,USD,EUR,GBP,JPY'
+                'currency_code' => 'sometimes|required|string|in:VND'
             ]);
 
             $wallet = $this->walletService->updateWallet($id, $userId, $validated);

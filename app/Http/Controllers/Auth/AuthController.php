@@ -323,7 +323,7 @@ class AuthController extends Controller{
     {
         $request->validate([
             'full_name'           => 'nullable|string|max:255',
-            'currency'            => 'nullable|string|in:VND,USD,EUR,GBP,JPY',
+            'currency'            => 'nullable|string|in:VND',
             'timezone'            => 'nullable|string|timezone',
             'theme'               => 'nullable|string|in:light,dark',
             'language'            => 'nullable|string|in:vi,en',
