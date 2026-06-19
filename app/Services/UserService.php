@@ -74,6 +74,9 @@ class UserService
             throw new \Exception(__('messages.email_not_verified'));
         }
 
+        // Thu hồi toàn bộ các phiên làm việc đang hoạt động của người dùng trước khi cấp phiên mới
+        $this->logoutAllDevices($user->user_id);
+
         $accessToken = Str::random(60);
         $refreshToken = Str::random(60);
 
@@ -421,6 +424,9 @@ class UserService
 
     private function generateUserSession($user, array $deviceData): array
     {
+        // Thu hồi toàn bộ các phiên làm việc đang hoạt động của người dùng trước khi cấp phiên mới
+        $this->logoutAllDevices($user->user_id);
+
         $accessToken = Str::random(60);
         $refreshToken = Str::random(60);
 
