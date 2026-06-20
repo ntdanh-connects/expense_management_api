@@ -309,6 +309,7 @@ class QrTransferController extends Controller
             'notes' => 'nullable|string|max:500',
             'timezone' => 'nullable|string|timezone',
             'is_qr' => 'nullable|boolean',
+            'category_id' => 'nullable|uuid',
             // Fields required for internal P2P
             'payee_user_id' => 'required_if:payee_type,internal|uuid',
             'to_wallet_id' => 'nullable|uuid',
@@ -333,6 +334,8 @@ class QrTransferController extends Controller
             if ($validated['payee_type'] === 'external' && $fromWallet->currency_code !== 'VND') {
                 return response()->json(['status' => 'error', 'message' => __('messages.qr_external_foreign_currency_not_allowed')], 400);
             }
+
+            $categoryId = $validated['category_id'] ?? null;
 
             if ($validated['payee_type'] === 'internal') {
                 $recipientId = $validated['payee_user_id'];
@@ -400,7 +403,8 @@ class QrTransferController extends Controller
                     $validated['notes'],
                     $validated['timezone'] ?? null,
                     $payee->id,
-                    $isQr
+                    $isQr,
+                    $categoryId
                 );
  
                 return response()->json([
@@ -435,7 +439,8 @@ class QrTransferController extends Controller
                     $validated['notes'],
                     $validated['timezone'] ?? null,
                     $payee->id,
-                    $isQr
+                    $isQr,
+                    $categoryId
                 );
  
                 // Call VietinBank Sandbox Service to simulate external bank transfer logging

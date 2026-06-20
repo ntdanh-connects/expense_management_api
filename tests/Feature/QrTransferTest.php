@@ -394,4 +394,111 @@ class QrTransferTest extends TestCase
             'title' => 'Thanh toán cho HIGHLANDS COFFEE'
         ]);
     }
+
+    public function test_internal_p2p_transfer_with_category()
+    {
+        // 1. Create recipient user & wallet
+        $recipientAuth = $this->authenticateUser('recipient_cat@example.com', 'Recipient Cat', 'USR111111');
+        $recipientId = $recipientAuth['user_id'];
+
+        $recipientWalletId = (string) Str::uuid7();
+        DB::table('wallets')->insert([
+            'id' => $recipientWalletId,
+            'user_id' => $recipientId,
+            'name' => 'Ví Ngân Hàng Recipient Cat',
+            'type' => 'bank',
+            'currency_code' => 'VND',
+            'is_hidden' => false,
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        DB::table('wallet_balances')->insert([
+            'wallet_id' => $recipientWalletId,
+            'available_balance' => 0.00,
+            'version' => 1,
+            'updated_at' => now()
+        ]);
+
+        // Create category for the sender
+        $categoryId = (string) Str::uuid7();
+        DB::table('categories')->insert([
+            'id' => $categoryId,
+            'user_id' => $this->userId,
+            'parent_id' => null,
+            'type' => 'expense',
+            'name' => 'Ăn uống',
+            'is_default' => false,
+            'sort_order' => 1,
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        // 2. Perform transfer with category_id
+        $response = $this->postJson('/api/qr/transfer', [
+            'from_wallet_id' => $this->walletId,
+            'payee_type' => 'internal',
+            'payee_user_id' => $recipientId,
+            'amount' => 50000.00,
+            'notes' => 'Chuyển tiền P2P test',
+            'category_id' => $categoryId
+        ], [
+            'Authorization' => 'Bearer ' . $this->token
+        ]);
+
+        $response->assertStatus(200);
+
+        // Verify transactions created with correct category_id
+        $this->assertDatabaseHas('transactions', [
+            'user_id' => $this->userId,
+            'wallet_id' => $this->walletId,
+            'type' => 'expense',
+            'amount' => 50000.00,
+            'category_id' => $categoryId,
+            'title' => 'Chuyển tiền qua mã QR đến Recipient Cat'
+        ]);
+    }
+
+    public function test_external_bank_transfer_with_category()
+    {
+        // Create category for the sender
+        $categoryId = (string) Str::uuid7();
+        DB::table('categories')->insert([
+            'id' => $categoryId,
+            'user_id' => $this->userId,
+            'parent_id' => null,
+            'type' => 'expense',
+            'name' => 'Mua sắm',
+            'is_default' => false,
+            'sort_order' => 1,
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        // Perform transfer to bank with category_id
+        $response = $this->postJson('/api/qr/transfer', [
+            'from_wallet_id' => $this->walletId,
+            'payee_type' => 'external',
+            'bank_code' => '970415',
+            'account_number' => '99995555',
+            'payee_name' => 'HIGHLANDS COFFEE',
+            'amount' => 30000.00,
+            'notes' => 'Coffee at Highlands',
+            'category_id' => $categoryId
+        ], [
+            'Authorization' => 'Bearer ' . $this->token
+        ]);
+
+        $response->assertStatus(200);
+
+        // Verify transaction was created in DB with correct category_id
+        $this->assertDatabaseHas('transactions', [
+            'user_id' => $this->userId,
+            'wallet_id' => $this->walletId,
+            'type' => 'expense',
+            'amount' => 30000.00,
+            'category_id' => $categoryId,
+            'title' => 'Thanh toán cho HIGHLANDS COFFEE'
+        ]);
+    }
 }

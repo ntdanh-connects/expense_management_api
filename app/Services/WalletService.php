@@ -310,9 +310,9 @@ class WalletService {
     /**
      * Chuyển tiền P2P giữa 2 người dùng khác nhau trong hệ thống
      */
-    public function p2pTransfer(string $fromUserId, string $toUserId, string $fromWalletId, string $toWalletId, float $amount, ?string $notes = null, ?string $timezone = null, ?string $payeeId = null, bool $isQr = true)
+    public function p2pTransfer(string $fromUserId, string $toUserId, string $fromWalletId, string $toWalletId, float $amount, ?string $notes = null, ?string $timezone = null, ?string $payeeId = null, bool $isQr = true, ?string $categoryId = null)
     {
-        return DB::transaction(function () use ($fromUserId, $toUserId, $fromWalletId, $toWalletId, $amount, $notes, $timezone, $payeeId, $isQr) {
+        return DB::transaction(function () use ($fromUserId, $toUserId, $fromWalletId, $toWalletId, $amount, $notes, $timezone, $payeeId, $isQr, $categoryId) {
             if ($fromWalletId === $toWalletId) {
                 throw new \Exception(__('messages.wallets_same'));
             }
@@ -372,12 +372,18 @@ class WalletService {
             $senderProfile = DB::table('user_profiles')->where('user_id', $fromUserId)->first();
             $senderName = $senderProfile ? $senderProfile->full_name : 'Người gửi';
 
+            $expenseTitle = $isQr ? "Chuyển tiền qua mã QR đến {$recipientName}" : "Chuyển tiền đến {$recipientName}";
+            $expenseCategoryId = $categoryId ?? $this->autoClassifyCategory($fromUserId, $expenseTitle, $notes, 'expense');
+
+            $incomeTitle = $isQr ? "Nhận tiền từ {$senderName} qua mã QR" : "Nhận tiền từ {$senderName}";
+            $incomeCategoryId = $this->autoClassifyCategory($toUserId, $incomeTitle, $notes, 'income');
+
             // Giao dịch 1: Chi tiền từ người gửi
             DB::table('transactions')->insert([
                 'id'                      => $expenseId,
                 'user_id'                 => $fromUserId,
                 'wallet_id'               => $fromWalletId,
-                'category_id'             => null,
+                'category_id'             => $expenseCategoryId,
                 'payee_id'                => $payeeId,
                 'type'                    => 'expense',
                 'status'                  => 'completed',
@@ -385,7 +391,7 @@ class WalletService {
                 'currency_code'           => $fromCurrency,
                 'exchange_rate'           => 1.000000,
                 'amount_in_user_currency' => $expenseAmountInUserCurrency,
-                'title'                   => $isQr ? "Chuyển tiền qua mã QR đến {$recipientName}" : "Chuyển tiền đến {$recipientName}",
+                'title'                   => $expenseTitle,
                 'notes'                   => $notes,
                 'transaction_date'        => now(),
                 'source_type'             => 'transfer',
@@ -400,14 +406,14 @@ class WalletService {
                 'id'                      => $incomeId,
                 'user_id'                 => $toUserId,
                 'wallet_id'               => $toWalletId,
-                'category_id'             => null,
+                'category_id'             => $incomeCategoryId,
                 'type'                    => 'income',
                 'status'                  => 'completed',
                 'amount'                  => $convertedAmount,
                 'currency_code'           => $toCurrency,
                 'exchange_rate'           => 1.000000,
                 'amount_in_user_currency' => $incomeAmountInUserCurrency,
-                'title'                   => $isQr ? "Nhận tiền từ {$senderName} qua mã QR" : "Nhận tiền từ {$senderName}",
+                'title'                   => $incomeTitle,
                 'notes'                   => $notes,
                 'transaction_date'        => now(),
                 'source_type'             => 'transfer',
@@ -481,9 +487,9 @@ class WalletService {
     /**
      * Chuyển tiền ảo đến tài khoản ngân hàng ngoài (VietQR)
      */
-    public function bankTransfer(string $userId, string $fromWalletId, string $bankCode, string $accountNumber, string $accountName, float $amount, ?string $notes = null, ?string $timezone = null, ?string $payeeId = null, bool $isQr = true)
+    public function bankTransfer(string $userId, string $fromWalletId, string $bankCode, string $accountNumber, string $accountName, float $amount, ?string $notes = null, ?string $timezone = null, ?string $payeeId = null, bool $isQr = true, ?string $categoryId = null)
     {
-        return DB::transaction(function () use ($userId, $fromWalletId, $bankCode, $accountNumber, $accountName, $amount, $notes, $timezone, $payeeId, $isQr) {
+        return DB::transaction(function () use ($userId, $fromWalletId, $bankCode, $accountNumber, $accountName, $amount, $notes, $timezone, $payeeId, $isQr, $categoryId) {
             if ($amount <= 0) {
                 throw new \Exception(__('messages.amount_must_be_positive'));
             }
@@ -515,12 +521,15 @@ class WalletService {
 
             $expenseId = (string) Str::uuid7();
 
+            $expenseTitle = "Thanh toán cho {$accountName}";
+            $expenseCategoryId = $categoryId ?? $this->autoClassifyCategory($userId, $expenseTitle, $notes, 'expense');
+
             // Giao dịch Chi tiêu (Expense) của ví nguồn
             DB::table('transactions')->insert([
                 'id'                      => $expenseId,
                 'user_id'                 => $userId,
                 'wallet_id'               => $fromWalletId,
-                'category_id'             => null,
+                'category_id'             => $expenseCategoryId,
                 'payee_id'                => $payeeId,
                 'type'                    => 'expense',
                 'status'                  => 'completed',
@@ -528,7 +537,7 @@ class WalletService {
                 'currency_code'           => $fromCurrency,
                 'exchange_rate'           => 1.000000,
                 'amount_in_user_currency' => $expenseAmountInUserCurrency,
-                'title'                   => "Thanh toán cho {$accountName}",
+                'title'                   => $expenseTitle,
                 'notes'                   => $notes,
                 'transaction_date'        => now(),
                 'source_type'             => 'transfer',
@@ -557,5 +566,110 @@ class WalletService {
                 'payee_name' => $accountName
             ];
         });
+    }
+
+    /**
+     * Tự động phân loại danh mục bằng AI cho giao dịch mới tạo
+     */
+    protected function autoClassifyCategory(string $userId, ?string $title, ?string $notes, string $type): ?string
+    {
+        try {
+            $apiKey = env('GEMINI_API_KEY');
+            if (!$apiKey) {
+                return null;
+            }
+
+            $title = trim($title ?? '');
+            $notes = trim($notes ?? '');
+            if (empty($title) && empty($notes)) {
+                return null;
+            }
+
+            // Lấy toàn bộ danh mục của user
+            $categoryService = app(\App\Services\CategoryService::class);
+            $categories = $categoryService->getCategoriesTree($userId);
+
+            // Lọc danh mục cha có type tương ứng
+            $filteredParents = $categories->where('type', $type);
+
+            // Dựng danh sách phẳng các danh mục lá
+            $categoriesList = [];
+            foreach ($filteredParents as $parent) {
+                $children = $parent->children ?? collect();
+                if ($children->isEmpty()) {
+                    $categoriesList[] = [
+                        'id' => $parent->id,
+                        'name' => $parent->name,
+                        'parent_name' => null
+                    ];
+                } else {
+                    foreach ($children as $child) {
+                        $categoriesList[] = [
+                            'id' => $child->id,
+                            'name' => $child->name,
+                            'parent_name' => $parent->name
+                        ];
+                    }
+                }
+            }
+
+            if (empty($categoriesList)) {
+                return null;
+            }
+
+            $model = env('GEMINI_MODEL', 'gemini-3.5-flash');
+
+            $prompt = "Dựa trên tiêu đề giao dịch và ghi chú dưới đây, hãy chọn danh mục phù hợp nhất từ danh sách danh mục có sẵn.\n"
+                . "Tiêu đề: " . ($title ?: '(Trống)') . "\n"
+                . "Ghi chú/Nội dung: " . ($notes ?: '(Trống)') . "\n"
+                . "Loại giao dịch: " . $type . "\n\n"
+                . "Danh sách danh mục có sẵn (gồm ID, tên danh mục, và tên danh mục cha nếu có):\n"
+                . json_encode($categoriesList, JSON_UNESCAPED_UNICODE) . "\n\n"
+                . "Yêu cầu:\n"
+                . "Trả về duy nhất một đối tượng JSON có dạng:\n"
+                . "{\"category_id\": \"<ID danh mục được chọn>\"}\n"
+                . "Nếu không khớp danh mục nào phù hợp, hãy trả về:\n"
+                . "{\"category_id\": null}";
+
+            $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}";
+
+            $payload = [
+                'contents' => [
+                    [
+                        'role' => 'user',
+                        'parts' => [['text' => $prompt]]
+                    ]
+                ],
+                'generationConfig' => [
+                    'responseMimeType' => 'application/json',
+                ]
+            ];
+
+            $response = \Illuminate\Support\Facades\Http::timeout(5)->post($url, $payload);
+
+            if ($response->failed()) {
+                return null;
+            }
+
+            $result = $response->json();
+            $text = $result['candidates'][0]['content']['parts'][0]['text'] ?? null;
+            if (!$text) {
+                return null;
+            }
+
+            $data = json_decode(trim($text), true);
+            $categoryId = $data['category_id'] ?? null;
+
+            // Chốt chặn an toàn
+            $validIds = array_column($categoriesList, 'id');
+            if ($categoryId && in_array($categoryId, $validIds)) {
+                return $categoryId;
+            }
+
+            return null;
+        } catch (\Throwable $e) {
+            Log::warning('AI Auto-classification failed in WalletService: ' . $e->getMessage());
+            return null;
+        }
     }
 }
