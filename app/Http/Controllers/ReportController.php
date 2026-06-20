@@ -380,4 +380,138 @@ class ReportController extends Controller
             'data' => $data
         ]);
     }
+
+    /**
+     * GET /api/reports/wallets
+     * Báo cáo cơ cấu chi tiêu/thu nhập theo ví, loại bỏ chuyển khoản nội bộ
+     */
+    public function wallet(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+            'type' => 'nullable|string|in:income,expense'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Dữ liệu đầu vào không hợp lệ.',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $userId = $request->attributes->get('user_id');
+        $type = $request->query('type') ?? 'expense';
+
+        $version = Cache::get("user_{$userId}_report_version", 1);
+        $cacheKey = "user_{$userId}_report_{$version}_wallet_" . md5(json_encode($request->all()));
+
+        $response = Cache::remember($cacheKey, 600, function() use ($request, $userId, $type) {
+            $userTimezone = DB::table('user_preferences')->where('user_id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
+
+            $startDate = Carbon::parse($request->query('start_date'), $userTimezone)->startOfDay()->setTimezone('UTC');
+            $endDate = Carbon::parse($request->query('end_date'), $userTimezone)->endOfDay()->setTimezone('UTC');
+
+            // Lấy tổng số tiền của loại giao dịch đó trong khoảng thời gian để tính tỷ lệ %
+            $totalAmountResult = DB::table('transactions')
+                ->where('transactions.user_id', $userId)
+                ->whereNull('transactions.deleted_at')
+                ->where('transactions.type', $type)
+                ->where(function ($q) {
+                    $q->where(function ($sub) {
+                        $sub->where('transactions.source_type', '!=', 'transfer')
+                            ->orWhereNull('transactions.source_type');
+                    })
+                    ->orWhere(function ($sub) {
+                        $sub->where('transactions.source_type', '=', 'transfer')
+                            ->where(function ($inner) {
+                                $inner->whereNull('transactions.source_id')
+                                    ->orWhereNotExists(function ($existsQuery) {
+                                        $existsQuery->select(DB::raw(1))
+                                            ->from('wallet_transfers as wt')
+                                            ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
+                                            ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
+                                            ->whereColumn('wt.id', 'transactions.source_id')
+                                            ->whereColumn('fw.user_id', 'tw.user_id');
+                                     });
+                            });
+                    });
+                })
+                ->whereBetween('transactions.transaction_date', [$startDate, $endDate])
+                ->select(DB::raw("SUM(transactions.amount_in_user_currency) as total"))
+                ->first();
+
+            $totalAmount = (float) ($totalAmountResult->total ?? 0);
+
+            // Lấy chi tiết thống kê từng ví
+            $walletStats = DB::table('transactions')
+                ->join('wallets', 'transactions.wallet_id', '=', 'wallets.id')
+                ->where('transactions.user_id', $userId)
+                ->whereNull('transactions.deleted_at')
+                ->whereNull('wallets.deleted_at')
+                ->where('transactions.type', $type)
+                ->where(function ($q) {
+                    $q->where(function ($sub) {
+                        $sub->where('transactions.source_type', '!=', 'transfer')
+                            ->orWhereNull('transactions.source_type');
+                    })
+                    ->orWhere(function ($sub) {
+                        $sub->where('transactions.source_type', '=', 'transfer')
+                            ->where(function ($inner) {
+                                $inner->whereNull('transactions.source_id')
+                                    ->orWhereNotExists(function ($existsQuery) {
+                                        $existsQuery->select(DB::raw(1))
+                                            ->from('wallet_transfers as wt')
+                                            ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
+                                            ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
+                                            ->whereColumn('wt.id', 'transactions.source_id')
+                                            ->whereColumn('fw.user_id', 'tw.user_id');
+                                    });
+                            });
+                    });
+                })
+                ->whereBetween('transactions.transaction_date', [$startDate, $endDate])
+                ->select(
+                    'wallets.id as wallet_id',
+                    'wallets.name as wallet_name',
+                    'wallets.color as wallet_color',
+                    'wallets.icon as wallet_icon',
+                    DB::raw("SUM(transactions.amount_in_user_currency) as amount")
+                )
+                ->groupBy(
+                    'wallets.id',
+                    'wallets.name',
+                    'wallets.color',
+                    'wallets.icon'
+                )
+                ->orderBy('amount', 'desc')
+                ->get();
+
+            $data = collect($walletStats)->map(function ($item) use ($totalAmount) {
+                $amount = (float) $item->amount;
+                $percentage = $totalAmount > 0 ? round(($amount / $totalAmount) * 100, 2) : 0;
+
+                return [
+                    'wallet_id' => $item->wallet_id,
+                    'wallet_name' => $item->wallet_name,
+                    'wallet_color' => $item->wallet_color,
+                    'wallet_icon' => $item->wallet_icon,
+                    'amount' => $amount,
+                    'percentage' => $percentage
+                ];
+            })->sortByDesc('amount');
+
+            return [
+                'total_amount' => $totalAmount,
+                'wallets' => $data->values()->all()
+            ];
+        });
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Lấy phân bổ theo ví thành công',
+            'data' => $response
+        ]);
+    }
 }

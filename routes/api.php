@@ -102,6 +102,7 @@ Route::middleware(['custom.auth'])->group(function () {
     Route::get('/reports/summary', [ReportController::class, 'summary']);
     Route::get('/reports/categories', [ReportController::class, 'category']);
     Route::get('/reports/trends', [ReportController::class, 'trends']);
+    Route::get('/reports/wallets', [ReportController::class, 'wallet']);
 
     // Module 8: Thông báo in-app
     Route::get('/notifications', [NotificationController::class, 'index']);
