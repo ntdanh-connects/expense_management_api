@@ -231,4 +231,43 @@ class SandboxSimulateTest extends TestCase
         $response->assertJsonPath('status', 'error');
         $response->assertJsonPath('message', 'Chỉ hỗ trợ giả lập nhận tiền từ Sandbox vào ví ngân hàng hoặc ví điện tử.');
     }
+
+    /**
+     * Test 5: Thất bại khi giả lập chuyển khoản vào ví ngoại tệ (khác VND)
+     */
+    public function test_simulate_transfer_to_foreign_currency_wallet_fails()
+    {
+        // 1. Tạo một ví ngân hàng ngoại tệ (USD) của user hiện tại
+        $foreignWalletId = (string) Str::uuid7();
+        DB::table('wallets')->insert([
+            'id' => $foreignWalletId,
+            'user_id' => $this->userId,
+            'name' => 'Ví USD Test',
+            'type' => 'bank',
+            'currency_code' => 'USD',
+            'is_hidden' => false,
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        DB::table('wallet_balances')->insert([
+            'wallet_id' => $foreignWalletId,
+            'available_balance' => 0.00,
+            'version' => 1,
+            'updated_at' => now()
+        ]);
+
+        // 2. Gửi request giả lập nạp tiền vào ví ngoại tệ
+        $response = $this->postJson('/api/sandbox/simulate-transfer', [
+            'wallet_id' => $foreignWalletId,
+            'amount' => 500000.00
+        ], [
+            'Authorization' => 'Bearer ' . $this->token
+        ]);
+
+        // 3. Phải trả về mã lỗi 400 Bad Request
+        $response->assertStatus(400);
+        $response->assertJsonPath('status', 'error');
+        $response->assertJsonPath('message', 'Chỉ hỗ trợ giả lập nhận tiền từ Sandbox vào ví VND.');
+    }
 }
