@@ -412,4 +412,88 @@ class TransactionController extends Controller
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     }
+
+    /**
+     * DELETE /api/transactions/exports
+     * Xóa toàn bộ lịch sử xuất dữ liệu của người dùng (bao gồm cả file trên storage)
+     */
+    public function clearAllExports(Request $request): JsonResponse
+    {
+        try {
+            $userId = $request->attributes->get('user_id');
+            if (!$userId) {
+                return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
+            }
+
+            $exports = ReportExport::where('user_id', $userId)->get();
+
+            $diskName = config('filesystems.default') === 's3' ? 's3' : 'public';
+            $disk = Storage::disk($diskName);
+
+            foreach ($exports as $export) {
+                if ($export->file_url) {
+                    try {
+                        $filename = "exports/{$userId}/transactions_{$export->id}.xlsx";
+                        if ($disk->exists($filename)) {
+                            $disk->delete($filename);
+                        }
+                    } catch (\Throwable $e) {
+                        // Bỏ qua lỗi để tiếp tục
+                    }
+                }
+                $export->delete();
+            }
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Xóa toàn bộ lịch sử xuất dữ liệu thành công.'
+            ], 200);
+
+        } catch (\Throwable $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * DELETE /api/transactions/exports/{id}
+     * Xóa một bản ghi lịch sử xuất dữ liệu (bao gồm cả file trên storage nếu có)
+     */
+    public function destroyExport(Request $request, $id): JsonResponse
+    {
+        try {
+            $userId = $request->attributes->get('user_id');
+            if (!$userId) {
+                return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
+            }
+
+            $export = ReportExport::where('id', $id)->where('user_id', $userId)->first();
+            if (!$export) {
+                return response()->json(['status' => 'error', 'message' => 'Không tìm thấy yêu cầu xuất dữ liệu hoặc bạn không có quyền.'], 404);
+            }
+
+            // Xóa file vật lý trên storage nếu tồn tại
+            if ($export->file_url) {
+                try {
+                    $filename = "exports/{$userId}/transactions_{$id}.xlsx";
+                    $diskName = config('filesystems.default') === 's3' ? 's3' : 'public';
+                    $disk = Storage::disk($diskName);
+                    if ($disk->exists($filename)) {
+                        $disk->delete($filename);
+                    }
+                } catch (\Throwable $e) {
+                    // Bỏ qua lỗi xóa file để tiếp tục xóa bản ghi DB
+                }
+            }
+
+            $export->delete();
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Xóa lịch sử xuất dữ liệu thành công.'
+            ], 200);
+
+        } catch (\Throwable $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
+    }
 }
