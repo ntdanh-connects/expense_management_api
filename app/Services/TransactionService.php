@@ -195,6 +195,18 @@ class TransactionService
 
             $transferId = $isP2P ? (string) Str::uuid7() : null;
 
+            $txTitle = $data['title'] ?? null;
+            if ($isP2P) {
+                $txTitle = "Chuyển tiền đến " . ($payee->payee_name ?? 'Người nhận');
+            } elseif (empty($txTitle)) {
+                if ($categoryId) {
+                    $categoryName = DB::table('categories')->where('id', $categoryId)->value('name');
+                    $txTitle = $categoryName ?: ($type === 'expense' ? 'Chi tiêu' : 'Thu nhập');
+                } else {
+                    $txTitle = $type === 'expense' ? 'Chi tiêu' : 'Thu nhập';
+                }
+            }
+
             // Tạo giao dịch người gửi (sender transaction)
             $transaction = Transaction::create([
                 'id' => $transactionId,
@@ -208,7 +220,7 @@ class TransactionService
                 'currency_code' => $txCurrency,
                 'exchange_rate' => $rate,
                 'amount_in_user_currency' => $amountInUserCurrency,
-                'title' => $data['title'],
+                'title' => $txTitle,
                 'notes' => $data['notes'] ?? null,
                 'timezone' => $timezone,
                 'transaction_date' => $data['transaction_date'] ?? now(),

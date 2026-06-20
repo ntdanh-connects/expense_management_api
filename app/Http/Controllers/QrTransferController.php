@@ -308,6 +308,7 @@ class QrTransferController extends Controller
             'amount' => 'required|numeric|min:0.01',
             'notes' => 'nullable|string|max:500',
             'timezone' => 'nullable|string|timezone',
+            'is_qr' => 'nullable|boolean',
             // Fields required for internal P2P
             'payee_user_id' => 'required_if:payee_type,internal|uuid',
             'to_wallet_id' => 'nullable|uuid',
@@ -389,6 +390,7 @@ class QrTransferController extends Controller
                     'payee_name' => $payeeName,
                 ]);
  
+                $isQr = (bool) $request->input('is_qr', true);
                 $result = $this->walletService->p2pTransfer(
                     $userId,
                     $recipientId,
@@ -397,7 +399,8 @@ class QrTransferController extends Controller
                     $validated['amount'],
                     $validated['notes'],
                     $validated['timezone'] ?? null,
-                    $payee->id
+                    $payee->id,
+                    $isQr
                 );
  
                 return response()->json([
@@ -421,6 +424,7 @@ class QrTransferController extends Controller
                 ]);
 
                 // Call local bankTransfer to deduct balance and record expense
+                $isQr = (bool) $request->input('is_qr', true);
                 $result = $this->walletService->bankTransfer(
                     $userId,
                     $validated['from_wallet_id'],
@@ -430,7 +434,8 @@ class QrTransferController extends Controller
                     $validated['amount'],
                     $validated['notes'],
                     $validated['timezone'] ?? null,
-                    $payee->id
+                    $payee->id,
+                    $isQr
                 );
  
                 // Call VietinBank Sandbox Service to simulate external bank transfer logging

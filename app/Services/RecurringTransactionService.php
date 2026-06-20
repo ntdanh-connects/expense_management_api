@@ -325,6 +325,13 @@ class RecurringTransactionService
 
                         $transferId = $isP2P ? (string) Str::uuid7() : null;
 
+                        $recurringTitle = $rule->title;
+                        if ($isP2P && $payee) {
+                            $recurringTitle = "Chuyển tiền định kỳ đến " . ($payee->payee_name ?? 'Người nhận');
+                        } elseif ($payee && $payee->payee_type === 'external') {
+                            $recurringTitle = "Thanh toán định kỳ cho " . ($payee->payee_name ?? 'Người thụ hưởng');
+                        }
+
                         // Tạo giao dịch định kỳ người gửi (sender transaction)
                         $transaction = Transaction::create([
                             'id' => $transactionId,
@@ -338,7 +345,7 @@ class RecurringTransactionService
                             'currency_code' => $userCurrency,
                             'exchange_rate' => 1.000000,
                             'amount_in_user_currency' => $amount,
-                            'title' => $rule->title,
+                            'title' => $recurringTitle,
                             'notes' => __('messages.recurring_default_notes'),
                             'transaction_date' => $currentRunAt, // Ghi nhận đúng ngày thực tế của chu kỳ
                             'source_type' => $isP2P ? 'transfer' : 'recurring',
@@ -401,7 +408,7 @@ class RecurringTransactionService
                                 'currency_code' => $recipientCurrency,
                                 'exchange_rate' => $rateToRecipient,
                                 'amount_in_user_currency' => $recipientAmountInUserCurrency,
-                                'title' => "Nhận tiền từ {$senderName}",
+                                'title' => "Nhận tiền định kỳ từ {$senderName}",
                                 'notes' => __('messages.recurring_default_notes'),
                                 'timezone' => DB::table('user_preferences')->where('user_id', $payee->payee_user_id)->value('timezone') ?? 'Asia/Ho_Chi_Minh',
                                 'transaction_date' => $currentRunAt,

@@ -298,9 +298,9 @@ class WalletService {
     /**
      * Chuyển tiền P2P giữa 2 người dùng khác nhau trong hệ thống
      */
-    public function p2pTransfer(string $fromUserId, string $toUserId, string $fromWalletId, string $toWalletId, float $amount, ?string $notes = null, ?string $timezone = null, ?string $payeeId = null)
+    public function p2pTransfer(string $fromUserId, string $toUserId, string $fromWalletId, string $toWalletId, float $amount, ?string $notes = null, ?string $timezone = null, ?string $payeeId = null, bool $isQr = true)
     {
-        return DB::transaction(function () use ($fromUserId, $toUserId, $fromWalletId, $toWalletId, $amount, $notes, $timezone, $payeeId) {
+        return DB::transaction(function () use ($fromUserId, $toUserId, $fromWalletId, $toWalletId, $amount, $notes, $timezone, $payeeId, $isQr) {
             if ($fromWalletId === $toWalletId) {
                 throw new \Exception(__('messages.wallets_same'));
             }
@@ -373,7 +373,7 @@ class WalletService {
                 'currency_code'           => $fromCurrency,
                 'exchange_rate'           => 1.000000,
                 'amount_in_user_currency' => $expenseAmountInUserCurrency,
-                'title'                   => $notes ?? "Chuyển tiền đến {$recipientName}",
+                'title'                   => $isQr ? "Chuyển tiền qua mã QR đến {$recipientName}" : "Chuyển tiền đến {$recipientName}",
                 'notes'                   => $notes,
                 'transaction_date'        => now(),
                 'source_type'             => 'transfer',
@@ -395,7 +395,7 @@ class WalletService {
                 'currency_code'           => $toCurrency,
                 'exchange_rate'           => 1.000000,
                 'amount_in_user_currency' => $incomeAmountInUserCurrency,
-                'title'                   => $notes ?? "Nhận tiền từ {$senderName}",
+                'title'                   => $isQr ? "Nhận tiền từ {$senderName} qua mã QR" : "Nhận tiền từ {$senderName}",
                 'notes'                   => $notes,
                 'transaction_date'        => now(),
                 'source_type'             => 'transfer',
@@ -459,9 +459,9 @@ class WalletService {
     /**
      * Chuyển tiền ảo đến tài khoản ngân hàng ngoài (VietQR)
      */
-    public function bankTransfer(string $userId, string $fromWalletId, string $bankCode, string $accountNumber, string $accountName, float $amount, ?string $notes = null, ?string $timezone = null, ?string $payeeId = null)
+    public function bankTransfer(string $userId, string $fromWalletId, string $bankCode, string $accountNumber, string $accountName, float $amount, ?string $notes = null, ?string $timezone = null, ?string $payeeId = null, bool $isQr = true)
     {
-        return DB::transaction(function () use ($userId, $fromWalletId, $bankCode, $accountNumber, $accountName, $amount, $notes, $timezone, $payeeId) {
+        return DB::transaction(function () use ($userId, $fromWalletId, $bankCode, $accountNumber, $accountName, $amount, $notes, $timezone, $payeeId, $isQr) {
             if ($amount <= 0) {
                 throw new \Exception(__('messages.amount_must_be_positive'));
             }
@@ -506,7 +506,7 @@ class WalletService {
                 'currency_code'           => $fromCurrency,
                 'exchange_rate'           => 1.000000,
                 'amount_in_user_currency' => $expenseAmountInUserCurrency,
-                'title'                   => $notes ?? "Chuyển khoản đến {$accountName} ({$accountNumber})",
+                'title'                   => "Thanh toán cho {$accountName}",
                 'notes'                   => $notes,
                 'transaction_date'        => now(),
                 'source_type'             => 'transfer',
