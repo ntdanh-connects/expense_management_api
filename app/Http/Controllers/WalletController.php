@@ -49,7 +49,7 @@ class WalletController extends Controller {
 
             $validated = $request->validate([
                 'name'              => 'required|string',
-                'type'              => 'required|string|in:bank,ewallet',
+                'type'              => 'required|string', // cash, bank, ewallet, crypto
                 'icon'              => 'nullable|string',
                 'color'             => 'nullable|string',
                 'is_hidden'         => 'nullable|boolean',
@@ -80,7 +80,7 @@ class WalletController extends Controller {
 
             $validated = $request->validate([
                 'name'          => 'sometimes|required|string',
-                'type'          => 'sometimes|required|string|in:bank,ewallet',
+                'type'          => 'sometimes|required|string',
                 'icon'          => 'nullable|string',
                 'color'         => 'nullable|string',
                 'is_hidden'     => 'nullable|boolean',

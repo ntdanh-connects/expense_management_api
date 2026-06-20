@@ -192,4 +192,43 @@ class SandboxSimulateTest extends TestCase
 
         $response2->assertStatus(400);
     }
+
+    /**
+     * Test 4: Thất bại khi giả lập chuyển khoản vào ví tiền mặt (cash)
+     */
+    public function test_simulate_transfer_to_cash_wallet_fails()
+    {
+        // 1. Tạo một ví tiền mặt (cash) của user hiện tại
+        $cashWalletId = (string) Str::uuid7();
+        DB::table('wallets')->insert([
+            'id' => $cashWalletId,
+            'user_id' => $this->userId,
+            'name' => 'Ví Tiền Mặt Test',
+            'type' => 'cash',
+            'currency_code' => 'VND',
+            'is_hidden' => false,
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        DB::table('wallet_balances')->insert([
+            'wallet_id' => $cashWalletId,
+            'available_balance' => 0.00,
+            'version' => 1,
+            'updated_at' => now()
+        ]);
+
+        // 2. Gửi request giả lập nạp tiền vào ví tiền mặt
+        $response = $this->postJson('/api/sandbox/simulate-transfer', [
+            'wallet_id' => $cashWalletId,
+            'amount' => 500000.00
+        ], [
+            'Authorization' => 'Bearer ' . $this->token
+        ]);
+
+        // 3. Phải trả về mã lỗi 400 Bad Request
+        $response->assertStatus(400);
+        $response->assertJsonPath('status', 'error');
+        $response->assertJsonPath('message', 'Chỉ hỗ trợ giả lập nhận tiền từ Sandbox vào ví ngân hàng hoặc ví điện tử.');
+    }
 }

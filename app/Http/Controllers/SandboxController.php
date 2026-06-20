@@ -49,6 +49,11 @@ class SandboxController extends Controller
                 return response()->json(['status' => 'error', 'message' => 'Không tìm thấy ví hoặc bạn không có quyền truy cập.'], 404);
             }
 
+            // Chặn chuyển tiền sandbox vào ví không phải bank hoặc ewallet
+            if (!in_array($wallet->type, ['bank', 'ewallet'])) {
+                return response()->json(['status' => 'error', 'message' => 'Chỉ hỗ trợ giả lập nhận tiền từ Sandbox vào ví ngân hàng hoặc ví điện tử.'], 400);
+            }
+
             // 2. Chuẩn bị dữ liệu để gọi TransactionService
             $senderName = $validated['sender_name'] ?? 'VietinBank Sandbox User';
             $notes = $validated['notes'] ?? 'Chuyển tiền từ Sandbox';
