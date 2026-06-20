@@ -93,6 +93,24 @@ class NotificationController extends Controller
     }
 
     /**
+     * DELETE /api/notifications
+     * Xóa toàn bộ thông báo của người dùng
+     */
+    public function clearAll(Request $request)
+    {
+        $userId = $request->attributes->get('user_id');
+
+        DB::table('notifications')
+            ->where('user_id', $userId)
+            ->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Đã xóa toàn bộ thông báo.'
+        ]);
+    }
+
+    /**
      * DELETE /api/notifications/{id}
      * Xóa thông báo khỏi danh sách
      */

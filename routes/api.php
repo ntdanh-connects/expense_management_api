@@ -107,6 +107,7 @@ Route::middleware(['custom.auth'])->group(function () {
     Route::get('/notifications/preferences', [NotificationController::class, 'getPreferences']);
     Route::post('/notifications/preferences', [NotificationController::class, 'updatePreferences']);
     Route::post('/notifications/read-all', [NotificationController::class, 'readAll']);
+    Route::delete('/notifications', [NotificationController::class, 'clearAll']);
     Route::post('/notifications/{id}/read', [NotificationController::class, 'read']);
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
 
