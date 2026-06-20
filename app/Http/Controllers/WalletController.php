@@ -54,7 +54,6 @@ class WalletController extends Controller {
                 'color'             => 'nullable|string',
                 'is_hidden'         => 'nullable|boolean',
                 'currency_code'     => 'nullable|string|in:VND',
-                'available_balance' => ['nullable', 'string', 'regex:/^\d+(\.\d{1,2})?$/'] // Hứng số dư nạp vào bảng phụ
             ]);
 
             $wallet = $this->walletService->createNewWallet($userId, $validated);
