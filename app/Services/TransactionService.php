@@ -195,6 +195,11 @@ class TransactionService
 
             $transferId = $isP2P ? (string) Str::uuid7() : null;
 
+            // Tự động phân loại danh mục bằng AI nếu category_id trống
+            if (empty($categoryId)) {
+                $categoryId = $this->autoClassifyCategory($userId, $data['title'] ?? null, $data['notes'] ?? null, $type);
+            }
+
             $txTitle = $data['title'] ?? null;
             if ($isP2P) {
                 $txTitle = "Chuyển tiền đến " . ($payee->payee_name ?? 'Người nhận');
@@ -263,12 +268,14 @@ class TransactionService
                 $senderProfile = DB::table('user_profiles')->where('user_id', $userId)->first();
                 $senderName = $senderProfile ? $senderProfile->full_name : 'Người gửi';
 
+                $recipientCategoryId = $this->autoClassifyCategory($payee->payee_user_id, "Nhận tiền từ {$senderName}", $data['notes'] ?? null, 'income');
+
                 // Create recipient transaction
                 Transaction::create([
                     'id' => $recipientTransactionId,
                     'user_id' => $payee->payee_user_id,
                     'wallet_id' => $recipientWallet->id,
-                    'category_id' => null,
+                    'category_id' => $recipientCategoryId,
                     'payee_id' => null,
                     'type' => 'income',
                     'status' => 'completed',
@@ -748,5 +755,110 @@ class TransactionService
 
             return true;
         });
+    }
+
+    /**
+     * Tự động phân loại danh mục bằng AI cho giao dịch mới tạo
+     */
+    protected function autoClassifyCategory(string $userId, ?string $title, ?string $notes, string $type): ?string
+    {
+        try {
+            $apiKey = env('GEMINI_API_KEY');
+            if (!$apiKey) {
+                return null;
+            }
+
+            $title = trim($title ?? '');
+            $notes = trim($notes ?? '');
+            if (empty($title) && empty($notes)) {
+                return null;
+            }
+
+            // Lấy toàn bộ danh mục của user
+            $categoryService = app(\App\Services\CategoryService::class);
+            $categories = $categoryService->getCategoriesTree($userId);
+
+            // Lọc danh mục cha có type tương ứng
+            $filteredParents = $categories->where('type', $type);
+
+            // Dựng danh sách phẳng các danh mục lá
+            $categoriesList = [];
+            foreach ($filteredParents as $parent) {
+                $children = $parent->children ?? collect();
+                if ($children->isEmpty()) {
+                    $categoriesList[] = [
+                        'id' => $parent->id,
+                        'name' => $parent->name,
+                        'parent_name' => null
+                    ];
+                } else {
+                    foreach ($children as $child) {
+                        $categoriesList[] = [
+                            'id' => $child->id,
+                            'name' => $child->name,
+                            'parent_name' => $parent->name
+                        ];
+                    }
+                }
+            }
+
+            if (empty($categoriesList)) {
+                return null;
+            }
+
+            $model = env('GEMINI_MODEL', 'gemini-3.5-flash');
+
+            $prompt = "Dựa trên tiêu đề giao dịch và ghi chú dưới đây, hãy chọn danh mục phù hợp nhất từ danh sách danh mục có sẵn.\n"
+                . "Tiêu đề: " . ($title ?: '(Trống)') . "\n"
+                . "Ghi chú/Nội dung: " . ($notes ?: '(Trống)') . "\n"
+                . "Loại giao dịch: " . $type . "\n\n"
+                . "Danh sách danh mục có sẵn (gồm ID, tên danh mục, và tên danh mục cha nếu có):\n"
+                . json_encode($categoriesList, JSON_UNESCAPED_UNICODE) . "\n\n"
+                . "Yêu cầu:\n"
+                . "Trả về duy nhất một đối tượng JSON có dạng:\n"
+                . "{\"category_id\": \"<ID danh mục được chọn>\"}\n"
+                . "Nếu không khớp danh mục nào phù hợp, hãy trả về:\n"
+                . "{\"category_id\": null}";
+
+            $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}";
+
+            $payload = [
+                'contents' => [
+                    [
+                        'role' => 'user',
+                        'parts' => [['text' => $prompt]]
+                    ]
+                ],
+                'generationConfig' => [
+                    'responseMimeType' => 'application/json',
+                ]
+            ];
+
+            $response = \Illuminate\Support\Facades\Http::timeout(5)->post($url, $payload);
+
+            if ($response->failed()) {
+                return null;
+            }
+
+            $result = $response->json();
+            $text = $result['candidates'][0]['content']['parts'][0]['text'] ?? null;
+            if (!$text) {
+                return null;
+            }
+
+            $data = json_decode(trim($text), true);
+            $categoryId = $data['category_id'] ?? null;
+
+            // Chốt chặn an toàn
+            $validIds = array_column($categoriesList, 'id');
+            if ($categoryId && in_array($categoryId, $validIds)) {
+                return $categoryId;
+            }
+
+            return null;
+        } catch (\Throwable $e) {
+            Log::warning('AI Auto-classification failed in TransactionService: ' . $e->getMessage());
+            return null;
+        }
     }
 }
