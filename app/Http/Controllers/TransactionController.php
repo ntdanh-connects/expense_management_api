@@ -80,7 +80,7 @@ class TransactionController extends Controller
                 'payee_id'         => 'nullable|uuid|exists:saved_payees,id',
                 'type'             => 'required|string|in:income,expense',
                 'amount'           => 'required|numeric|min:0.01',
-                'title'            => 'required|string|max:255',
+                'title'            => 'nullable|string|max:255',
                 'notes'            => 'nullable|string|max:1000',
                 'transaction_date' => 'nullable|date',
                 'currency_code'    => 'nullable|string|in:VND',

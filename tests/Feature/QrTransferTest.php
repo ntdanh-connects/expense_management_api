@@ -294,14 +294,73 @@ class QrTransferTest extends TestCase
             'user_id' => $this->userId,
             'wallet_id' => $this->walletId,
             'type' => 'expense',
-            'amount' => 50000.00
+            'amount' => 50000.00,
+            'title' => 'Chuyển tiền qua mã QR đến Recipient 2'
         ]);
- 
+
         $this->assertDatabaseHas('transactions', [
             'user_id' => $recipientId,
             'wallet_id' => $recipientWalletId,
             'type' => 'income',
-            'amount' => 50000.00
+            'amount' => 50000.00,
+            'title' => 'Nhận tiền từ Test Sender qua mã QR'
+        ]);
+    }
+
+    public function test_internal_p2p_transfer_non_qr()
+    {
+        // 1. Create recipient user & wallet
+        $recipientAuth = $this->authenticateUser('recipient3@example.com', 'Recipient 3', 'USR777777');
+        $recipientId = $recipientAuth['user_id'];
+
+        $recipientWalletId = (string) Str::uuid7();
+        DB::table('wallets')->insert([
+            'id' => $recipientWalletId,
+            'user_id' => $recipientId,
+            'name' => 'Ví Ngân Hàng Recipient 3',
+            'type' => 'bank',
+            'currency_code' => 'VND',
+            'is_hidden' => false,
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        DB::table('wallet_balances')->insert([
+            'wallet_id' => $recipientWalletId,
+            'available_balance' => 0.00,
+            'version' => 1,
+            'updated_at' => now()
+        ]);
+
+        // 2. Perform transfer with is_qr = false
+        $response = $this->postJson('/api/qr/transfer', [
+            'from_wallet_id' => $this->walletId,
+            'payee_type' => 'internal',
+            'payee_user_id' => $recipientId,
+            'amount' => 30000.00,
+            'notes' => 'Chuyển tiền P2P không QR test',
+            'is_qr' => false
+        ], [
+            'Authorization' => 'Bearer ' . $this->token
+        ]);
+
+        $response->assertStatus(200);
+
+        // Verify transactions created with correct non-QR titles
+        $this->assertDatabaseHas('transactions', [
+            'user_id' => $this->userId,
+            'wallet_id' => $this->walletId,
+            'type' => 'expense',
+            'amount' => 30000.00,
+            'title' => 'Chuyển tiền đến Recipient 3'
+        ]);
+
+        $this->assertDatabaseHas('transactions', [
+            'user_id' => $recipientId,
+            'wallet_id' => $recipientWalletId,
+            'type' => 'income',
+            'amount' => 30000.00,
+            'title' => 'Nhận tiền từ Test Sender'
         ]);
     }
  
@@ -332,7 +391,7 @@ class QrTransferTest extends TestCase
             'wallet_id' => $this->walletId,
             'type' => 'expense',
             'amount' => 30000.00,
-            'title' => 'Coffee at Highlands'
+            'title' => 'Thanh toán cho HIGHLANDS COFFEE'
         ]);
     }
 }
