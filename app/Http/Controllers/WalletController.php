@@ -189,6 +189,7 @@ class WalletController extends Controller {
                 ->join('wallets as from_wallet', 'wallet_transfers.from_wallet_id', '=', 'from_wallet.id')
                 ->join('wallets as to_wallet', 'wallet_transfers.to_wallet_id', '=', 'to_wallet.id')
                 ->where('from_wallet.user_id', $userId)
+                ->where('to_wallet.user_id', $userId)
                 ->select([
                     'wallet_transfers.id',
                     'from_wallet.name as from_wallet_name',
