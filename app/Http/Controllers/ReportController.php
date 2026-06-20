@@ -121,182 +121,99 @@ class ReportController extends Controller
         $cacheKey = "user_{$userId}_report_{$version}_category_" . md5(json_encode($request->all()));
 
         $response = Cache::remember($cacheKey, 600, function() use ($request, $userId, $type) {
+            $userTimezone = DB::table('user_preferences')->where('user_id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
+
             if ($request->has('start_date') && $request->has('end_date')) {
-                $userTimezone = DB::table('user_preferences')->where('user_id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
                 $startDate = Carbon::parse($request->query('start_date'), $userTimezone)->startOfDay()->setTimezone('UTC');
                 $endDate = Carbon::parse($request->query('end_date'), $userTimezone)->endOfDay()->setTimezone('UTC');
-
-                // Lấy tổng số tiền của loại giao dịch đó trong khoảng thời gian để tính tỷ lệ % (Sử dụng transactions.type thay vì join categories để tính cả giao dịch chưa phân loại)
-                $totalAmountResult = DB::table('transactions')
-                    ->where('transactions.user_id', $userId)
-                    ->whereNull('transactions.deleted_at')
-                    ->where('transactions.type', $type)
-                    ->where(function ($q) {
-                        $q->where(function ($sub) {
-                            $sub->where('transactions.source_type', '!=', 'transfer')
-                                ->orWhereNull('transactions.source_type');
-                        })
-                        ->orWhere(function ($sub) {
-                            $sub->where('transactions.source_type', '=', 'transfer')
-                                ->where(function ($inner) {
-                                    $inner->whereNull('transactions.source_id')
-                                        ->orWhereNotExists(function ($existsQuery) {
-                                            $existsQuery->select(DB::raw(1))
-                                                ->from('wallet_transfers as wt')
-                                                ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
-                                                ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
-                                                ->whereColumn('wt.id', 'transactions.source_id')
-                                                ->whereColumn('fw.user_id', 'tw.user_id');
-                                        });
-                                });
-                        });
-                    })
-                    ->whereBetween('transactions.transaction_date', [$startDate, $endDate])
-                    ->select(DB::raw("SUM(transactions.amount_in_user_currency) as total"))
-                    ->first();
-
-                $totalAmount = (float) ($totalAmountResult->total ?? 0);
-
-                // Lấy chi tiết thống kê từng hạng mục từ bảng transactions (dùng leftJoin để lấy cả các giao dịch chưa phân loại)
-                $categoriesStats = DB::table('transactions')
-                    ->leftJoin('categories', function($join) {
-                        $join->on('transactions.category_id', '=', 'categories.id')
-                             ->whereNull('categories.deleted_at');
-                    })
-                    ->leftJoin('categories as parent', 'categories.parent_id', '=', 'parent.id')
-                    ->where('transactions.user_id', $userId)
-                    ->whereNull('transactions.deleted_at')
-                    ->where('transactions.type', $type)
-                    ->where(function ($q) {
-                        $q->where(function ($sub) {
-                            $sub->where('transactions.source_type', '!=', 'transfer')
-                                ->orWhereNull('transactions.source_type');
-                        })
-                        ->orWhere(function ($sub) {
-                            $sub->where('transactions.source_type', '=', 'transfer')
-                                ->where(function ($inner) {
-                                    $inner->whereNull('transactions.source_id')
-                                        ->orWhereNotExists(function ($existsQuery) {
-                                            $existsQuery->select(DB::raw(1))
-                                                ->from('wallet_transfers as wt')
-                                                ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
-                                                ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
-                                                ->whereColumn('wt.id', 'transactions.source_id')
-                                                ->whereColumn('fw.user_id', 'tw.user_id');
-                                        });
-                                });
-                        });
-                    })
-                    ->whereBetween('transactions.transaction_date', [$startDate, $endDate])
-                    ->select(
-                        'categories.id as category_id',
-                        'categories.name as category_name',
-                        'categories.color as category_color',
-                        'categories.icon as category_icon',
-                        'categories.parent_id',
-                        'parent.name as parent_name',
-                        DB::raw("SUM(transactions.amount_in_user_currency) as amount")
-                    )
-                    ->groupBy(
-                        'categories.id',
-                        'categories.name',
-                        'categories.color',
-                        'categories.icon',
-                        'categories.parent_id',
-                        'parent.name'
-                    )
-                    ->orderBy('amount', 'desc')
-                    ->get();
             } else {
                 $month = (int) $request->query('month');
                 $year = (int) $request->query('year');
-
-                $totalAmountResult = DB::table('category_statistics')
-                    ->join('categories', 'category_statistics.category_id', '=', 'categories.id')
-                    ->where('category_statistics.user_id', $userId)
-                    ->where('category_statistics.month', $month)
-                    ->where('category_statistics.year', $year)
-                    ->where('categories.type', $type)
-                    ->whereNull('categories.deleted_at')
-                    ->select(DB::raw("SUM(category_statistics.total_amount) as total"))
-                    ->first();
-
-                $totalAmount = (float) ($totalAmountResult->total ?? 0);
-
-                $categoriesStats = DB::table('category_statistics')
-                    ->join('categories', 'category_statistics.category_id', '=', 'categories.id')
-                    ->leftJoin('categories as parent', 'categories.parent_id', '=', 'parent.id')
-                    ->where('category_statistics.user_id', $userId)
-                    ->where('category_statistics.month', $month)
-                    ->where('category_statistics.year', $year)
-                    ->where('categories.type', $type)
-                    ->whereNull('categories.deleted_at')
-                    ->select(
-                        'categories.id as category_id',
-                        'categories.name as category_name',
-                        'categories.color as category_color',
-                        'categories.icon as category_icon',
-                        'categories.parent_id',
-                        'parent.name as parent_name',
-                        'category_statistics.total_amount as amount'
-                    )
-                    ->orderBy('amount', 'desc')
-                    ->get();
-
-                // Lấy tổng số tiền của các giao dịch chưa phân loại trong tháng/năm đó
-                $userTimezone = DB::table('user_preferences')->where('user_id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
                 $startDate = Carbon::create($year, $month, 1, 0, 0, 0, $userTimezone)->startOfMonth()->setTimezone('UTC');
                 $endDate = Carbon::create($year, $month, 1, 23, 59, 59, $userTimezone)->endOfMonth()->setTimezone('UTC');
-
-                $uncategorizedSum = DB::table('transactions')
-                    ->leftJoin('categories', 'transactions.category_id', '=', 'categories.id')
-                    ->where('transactions.user_id', $userId)
-                    ->whereNull('transactions.deleted_at')
-                    ->where(function ($query) {
-                        $query->whereNull('transactions.category_id')
-                              ->orWhereNull('categories.id')
-                              ->orWhereNotNull('categories.deleted_at');
-                    })
-                    ->where('transactions.type', $type)
-                    ->where(function ($q) {
-                        $q->where(function ($sub) {
-                            $sub->where('transactions.source_type', '!=', 'transfer')
-                                ->orWhereNull('transactions.source_type');
-                        })
-                        ->orWhere(function ($sub) {
-                            $sub->where('transactions.source_type', '=', 'transfer')
-                                ->where(function ($inner) {
-                                    $inner->whereNull('transactions.source_id')
-                                        ->orWhereNotExists(function ($existsQuery) {
-                                            $existsQuery->select(DB::raw(1))
-                                                ->from('wallet_transfers as wt')
-                                                ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
-                                                ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
-                                                ->whereColumn('wt.id', 'transactions.source_id')
-                                                ->whereColumn('fw.user_id', 'tw.user_id');
-                                        });
-                                });
-                        });
-                    })
-                    ->whereBetween('transactions.transaction_date', [$startDate, $endDate])
-                    ->sum('transactions.amount_in_user_currency');
-
-                $uncategorizedSum = (float) $uncategorizedSum;
-                $totalAmount += $uncategorizedSum;
-
-                if ($uncategorizedSum > 0) {
-                    $uncategorizedObj = new \stdClass();
-                    $uncategorizedObj->category_id = 'uncategorized';
-                    $uncategorizedObj->category_name = 'uncategorized';
-                    $uncategorizedObj->category_color = '#9CA3AF';
-                    $uncategorizedObj->category_icon = 'help_outline';
-                    $uncategorizedObj->parent_id = null;
-                    $uncategorizedObj->parent_name = null;
-                    $uncategorizedObj->amount = $uncategorizedSum;
-
-                    $categoriesStats = collect($categoriesStats)->concat([$uncategorizedObj]);
-                }
             }
+
+            // Lấy tổng số tiền của loại giao dịch đó trong khoảng thời gian để tính tỷ lệ % (Sử dụng transactions.type thay vì join categories để tính cả giao dịch chưa phân loại)
+            $totalAmountResult = DB::table('transactions')
+                ->where('transactions.user_id', $userId)
+                ->whereNull('transactions.deleted_at')
+                ->where('transactions.type', $type)
+                ->where(function ($q) {
+                    $q->where(function ($sub) {
+                        $sub->where('transactions.source_type', '!=', 'transfer')
+                            ->orWhereNull('transactions.source_type');
+                    })
+                    ->orWhere(function ($sub) {
+                        $sub->where('transactions.source_type', '=', 'transfer')
+                            ->where(function ($inner) {
+                                $inner->whereNull('transactions.source_id')
+                                    ->orWhereNotExists(function ($existsQuery) {
+                                        $existsQuery->select(DB::raw(1))
+                                            ->from('wallet_transfers as wt')
+                                            ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
+                                            ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
+                                            ->whereColumn('wt.id', 'transactions.source_id')
+                                            ->whereColumn('fw.user_id', 'tw.user_id');
+                                    });
+                            });
+                    });
+                })
+                ->whereBetween('transactions.transaction_date', [$startDate, $endDate])
+                ->select(DB::raw("SUM(transactions.amount_in_user_currency) as total"))
+                ->first();
+
+            $totalAmount = (float) ($totalAmountResult->total ?? 0);
+
+            // Lấy chi tiết thống kê từng hạng mục từ bảng transactions (dùng leftJoin để lấy cả các giao dịch chưa phân loại)
+            $categoriesStats = DB::table('transactions')
+                ->leftJoin('categories', function($join) {
+                    $join->on('transactions.category_id', '=', 'categories.id')
+                         ->whereNull('categories.deleted_at');
+                })
+                ->leftJoin('categories as parent', 'categories.parent_id', '=', 'parent.id')
+                ->where('transactions.user_id', $userId)
+                ->whereNull('transactions.deleted_at')
+                ->where('transactions.type', $type)
+                ->where(function ($q) {
+                    $q->where(function ($sub) {
+                        $sub->where('transactions.source_type', '!=', 'transfer')
+                            ->orWhereNull('transactions.source_type');
+                    })
+                    ->orWhere(function ($sub) {
+                        $sub->where('transactions.source_type', '=', 'transfer')
+                            ->where(function ($inner) {
+                                $inner->whereNull('transactions.source_id')
+                                    ->orWhereNotExists(function ($existsQuery) {
+                                        $existsQuery->select(DB::raw(1))
+                                            ->from('wallet_transfers as wt')
+                                            ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
+                                            ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
+                                            ->whereColumn('wt.id', 'transactions.source_id')
+                                            ->whereColumn('fw.user_id', 'tw.user_id');
+                                    });
+                            });
+                    });
+                })
+                ->whereBetween('transactions.transaction_date', [$startDate, $endDate])
+                ->select(
+                    'categories.id as category_id',
+                    'categories.name as category_name',
+                    'categories.color as category_color',
+                    'categories.icon as category_icon',
+                    'categories.parent_id',
+                    'parent.name as parent_name',
+                    DB::raw("SUM(transactions.amount_in_user_currency) as amount")
+                )
+                ->groupBy(
+                    'categories.id',
+                    'categories.name',
+                    'categories.color',
+                    'categories.icon',
+                    'categories.parent_id',
+                    'parent.name'
+                )
+                ->orderBy('amount', 'desc')
+                ->get();
 
             $data = collect($categoriesStats)->map(function ($item) use ($totalAmount) {
                 $amount = (float) $item->amount;

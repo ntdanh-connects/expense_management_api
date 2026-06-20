@@ -23,43 +23,77 @@ class UpdateStatistics
         \Illuminate\Support\Facades\Cache::put("user_{$userId}_report_version", $version + 1, 86400);
 
         if ($isDeleted) {
-            // Trường hợp XÓA giao dịch: trừ đi số tiền của giao dịch đó
-            $this->applyDifference(
-                $transaction->user_id,
-                $transaction->transaction_date,
-                $transaction->category_id,
-                $transaction->type,
-                -1 * (float) $transaction->amount_in_user_currency
-            );
+            // Trường hợp XÓA giao dịch: trừ đi số tiền của giao dịch đó (nếu không phải chuyển khoản nội bộ)
+            if (!$this->isInternalTransfer($transaction->source_type ?? '', $transaction->source_id)) {
+                $this->applyDifference(
+                    $transaction->user_id,
+                    $transaction->transaction_date,
+                    $transaction->category_id,
+                    $transaction->type,
+                    -1 * (float) $transaction->amount_in_user_currency
+                );
+            }
         } elseif ($oldData !== null) {
             // Trường hợp CẬP NHẬT giao dịch:
-            // 1. Trừ đi giá trị cũ
-            $oldUserId = $oldData['user_id'] ?? $transaction->user_id;
-            $oldDate = Carbon::parse($oldData['transaction_date'] ?? $transaction->transaction_date);
-            $oldCategoryId = array_key_exists('category_id', $oldData) ? $oldData['category_id'] : $transaction->category_id;
-            $oldType = $oldData['type'] ?? $transaction->type;
-            $oldAmount = (float) ($oldData['amount_in_user_currency'] ?? $transaction->amount_in_user_currency);
+            // 1. Trừ đi giá trị cũ (nếu không phải chuyển khoản nội bộ)
+            $oldSourceType = $oldData['source_type'] ?? $transaction->source_type;
+            $oldSourceId = array_key_exists('source_id', $oldData) ? $oldData['source_id'] : $transaction->source_id;
 
-            $this->applyDifference($oldUserId, $oldDate, $oldCategoryId, $oldType, -1 * $oldAmount);
+            if (!$this->isInternalTransfer($oldSourceType ?? '', $oldSourceId)) {
+                $oldUserId = $oldData['user_id'] ?? $transaction->user_id;
+                $oldDate = Carbon::parse($oldData['transaction_date'] ?? $transaction->transaction_date);
+                $oldCategoryId = array_key_exists('category_id', $oldData) ? $oldData['category_id'] : $transaction->category_id;
+                $oldType = $oldData['type'] ?? $transaction->type;
+                $oldAmount = (float) ($oldData['amount_in_user_currency'] ?? $transaction->amount_in_user_currency);
 
-            // 2. Cộng thêm giá trị mới
-            $this->applyDifference(
-                $transaction->user_id,
-                $transaction->transaction_date,
-                $transaction->category_id,
-                $transaction->type,
-                (float) $transaction->amount_in_user_currency
-            );
+                $this->applyDifference($oldUserId, $oldDate, $oldCategoryId, $oldType, -1 * $oldAmount);
+            }
+
+            // 2. Cộng thêm giá trị mới (nếu không phải chuyển khoản nội bộ)
+            if (!$this->isInternalTransfer($transaction->source_type ?? '', $transaction->source_id)) {
+                $this->applyDifference(
+                    $transaction->user_id,
+                    $transaction->transaction_date,
+                    $transaction->category_id,
+                    $transaction->type,
+                    (float) $transaction->amount_in_user_currency
+                );
+            }
         } else {
-            // Trường hợp TẠO MỚI giao dịch: cộng thêm số tiền
-            $this->applyDifference(
-                $transaction->user_id,
-                $transaction->transaction_date,
-                $transaction->category_id,
-                $transaction->type,
-                (float) $transaction->amount_in_user_currency
-            );
+            // Trường hợp TẠO MỚI giao dịch: cộng thêm số tiền (nếu không phải chuyển khoản nội bộ)
+            if (!$this->isInternalTransfer($transaction->source_type ?? '', $transaction->source_id)) {
+                $this->applyDifference(
+                    $transaction->user_id,
+                    $transaction->transaction_date,
+                    $transaction->category_id,
+                    $transaction->type,
+                    (float) $transaction->amount_in_user_currency
+                );
+            }
         }
+    }
+
+    /**
+     * Kiểm tra giao dịch có phải là chuyển khoản nội bộ giữa các ví của cùng một user không
+     */
+    private function isInternalTransfer(string $sourceType, ?string $sourceId): bool
+    {
+        if ($sourceType !== 'transfer' || !$sourceId) {
+            return false;
+        }
+
+        $transfer = DB::table('wallet_transfers')->where('id', $sourceId)->first();
+        if (!$transfer) {
+            return false;
+        }
+
+        $fromWallet = DB::table('wallets')->where('id', $transfer->from_wallet_id)->first();
+        $toWallet = DB::table('wallets')->where('id', $transfer->to_wallet_id)->first();
+        if ($fromWallet && $toWallet) {
+            return $fromWallet->user_id === $toWallet->user_id;
+        }
+
+        return false;
     }
 
     /**
