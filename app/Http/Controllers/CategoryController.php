@@ -250,8 +250,9 @@ class CategoryController extends Controller
             // Nếu không có nội dung nào để phân tích thì bỏ qua luôn
             if (empty($title) && empty($notes)) {
                 return response()->json([
-                    'status' => 'success',
-                    'data'   => ['category_id' => null]
+                    'status'  => 'success',
+                    'message' => 'Phân loại danh mục thành công',
+                    'data'    => ['category_id' => null]
                 ], 200);
             }
 
@@ -334,8 +335,9 @@ class CategoryController extends Controller
 
             if (!$text) {
                 return response()->json([
-                    'status' => 'success',
-                    'data'   => ['category_id' => null]
+                    'status'  => 'success',
+                    'message' => 'Phân loại danh mục thành công',
+                    'data'    => ['category_id' => null]
                 ], 200);
             }
 
@@ -349,8 +351,9 @@ class CategoryController extends Controller
             }
 
             return response()->json([
-                'status' => 'success',
-                'data'   => [
+                'status'  => 'success',
+                'message' => 'Phân loại danh mục thành công',
+                'data'    => [
                     'category_id' => $categoryId
                 ]
             ], 200);

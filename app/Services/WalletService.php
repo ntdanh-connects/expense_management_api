@@ -7,6 +7,8 @@ use App\Services\ExchangeRateService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use App\Models\Transaction;
+use App\Events\TransactionSaved;
 
 class WalletService {
     protected $walletRepository;
@@ -247,6 +249,16 @@ class WalletService {
                 'updated_at'          => now()
             ]);
 
+            // Bắn sự kiện TransactionSaved để xóa cache và cập nhật thống kê
+            $expenseTx = Transaction::find($expenseId);
+            $incomeTx = Transaction::find($incomeId);
+            if ($expenseTx) {
+                event(new TransactionSaved($expenseTx));
+            }
+            if ($incomeTx) {
+                event(new TransactionSaved($incomeTx));
+            }
+
             return [
                 'transfer_id'            => $transferId,
                 'expense_transaction_id' => $expenseId,
@@ -431,6 +443,16 @@ class WalletService {
                 'updated_at'          => now()
             ]);
 
+            // Bắn sự kiện TransactionSaved để xóa cache và cập nhật thống kê
+            $expenseTx = Transaction::find($expenseId);
+            $incomeTx = Transaction::find($incomeId);
+            if ($expenseTx) {
+                event(new TransactionSaved($expenseTx));
+            }
+            if ($incomeTx) {
+                event(new TransactionSaved($incomeTx));
+            }
+
             // Gửi thông báo nhận tiền P2P cho người thụ hưởng
             try {
                 $recipient = \App\Models\User::find($toUserId);
@@ -522,6 +544,12 @@ class WalletService {
                 'last_transaction_id' => $expenseId,
                 'updated_at'          => now()
             ]);
+
+            // Bắn sự kiện TransactionSaved để xóa cache và cập nhật thống kê
+            $expenseTx = Transaction::find($expenseId);
+            if ($expenseTx) {
+                event(new TransactionSaved($expenseTx));
+            }
 
             return [
                 'expense_id' => $expenseId,
