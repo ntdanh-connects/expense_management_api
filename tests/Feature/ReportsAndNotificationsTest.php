@@ -10,7 +10,6 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 use App\Jobs\ExportTransactionsJob;
-use App\Jobs\ImportTransactionsJob;
 
 class ReportsAndNotificationsTest extends TestCase
 {
@@ -359,91 +358,6 @@ class ReportsAndNotificationsTest extends TestCase
         $data = $response->json('data');
         $this->assertNotEmpty($data);
         $this->assertEquals($exportId, $data[0]['id']);
-    }
-
-    /**
-     * Test 8: Gửi yêu cầu nhập file CSV (dispatch job vào Queue)
-     */
-    public function test_import_transactions_dispatches_job()
-    {
-        Queue::fake();
-        Storage::fake('local');
-
-        // Tạo file CSV giả lập
-        $csvContent = "Ngày Giao Dịch,Loại Giao Dịch,Số Tiền,Ví,Danh Mục,Tiêu Đề,Ghi Chú\n";
-        $csvContent .= "2026-06-01,Chi tiêu,100000,Ví Tiền Mặt,Ăn uống,Cơm trưa,Ăn ở quán\n";
-
-        $file = UploadedFile::fake()->createWithContent('transactions.csv', $csvContent);
-
-        $response = $this->postJson('/api/transactions/import', [
-            'file' => $file,
-        ], [
-            'Authorization' => 'Bearer ' . $this->token
-        ]);
-
-        $response->assertStatus(202);
-        $response->assertJsonPath('status', 'success');
-        $response->assertJsonStructure(['status', 'message', 'import_id']);
-
-        $importId = $response->json('import_id');
-        $this->assertNotEmpty($importId);
-
-        // Kiểm tra bản ghi import_jobs đã được tạo
-        $this->assertDatabaseHas('import_jobs', [
-            'id' => $importId,
-            'user_id' => $this->userId,
-            'status' => 'pending',
-        ]);
-
-        // Kiểm tra job đã được dispatch
-        Queue::assertPushed(ImportTransactionsJob::class);
-    }
-
-    /**
-     * Test 9: Import thất bại khi không gửi file
-     */
-    public function test_import_fails_without_file()
-    {
-        $response = $this->postJson('/api/transactions/import', [], [
-            'Authorization' => 'Bearer ' . $this->token
-        ]);
-
-        $response->assertStatus(400);
-    }
-
-    /**
-     * Test 10: Lấy danh sách lịch sử nhập file
-     */
-    public function test_list_imports()
-    {
-        $importId = (string) Str::uuid7();
-        DB::table('import_jobs')->insert([
-            'id' => $importId,
-            'user_id' => $this->userId,
-            'file_url' => 'imports/test.csv',
-            'status' => 'completed',
-            'total_rows' => 10,
-            'success_rows' => 8,
-            'failed_rows' => 2,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        $response = $this->getJson('/api/transactions/imports', [
-            'Authorization' => 'Bearer ' . $this->token
-        ]);
-
-        $response->assertStatus(200);
-        $response->assertJsonPath('status', 'success');
-        $response->assertJsonStructure([
-            'status',
-            'data',
-            'pagination' => ['total', 'per_page', 'current_page', 'last_page']
-        ]);
-
-        $data = $response->json('data');
-        $this->assertNotEmpty($data);
-        $this->assertEquals($importId, $data[0]['id']);
     }
 
     // =====================================================================

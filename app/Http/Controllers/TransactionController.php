@@ -4,9 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\TransactionService;
 use App\Jobs\ExportTransactionsJob;
-use App\Jobs\ImportTransactionsJob;
 use App\Models\ReportExport;
-use App\Models\ImportJob;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -89,7 +87,7 @@ class TransactionController extends Controller
                 'attachment'       => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400', // Tối đa 100MB
                 'attachments'      => 'nullable|array',
                 'attachments.*'    => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400',
-                'source_type'      => 'nullable|string|in:manual,recurring,transfer,adjustment,import'
+                'source_type'      => 'nullable|string|in:manual,recurring,transfer,adjustment'
             ]);
 
             $wallet = DB::table('wallets')->where('id', $validated['wallet_id'])->where('user_id', $userId)->first();
@@ -182,7 +180,7 @@ class TransactionController extends Controller
                 'attachment'       => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400',
                 'attachments'      => 'nullable|array',
                 'attachments.*'    => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400',
-                'source_type'      => 'nullable|string|in:manual,recurring,transfer,adjustment,import'
+                'source_type'      => 'nullable|string|in:manual,recurring,transfer,adjustment'
             ]);
 
             $existingTx = DB::table('transactions')->where('id', $id)->where('user_id', $userId)->first();
@@ -330,86 +328,4 @@ class TransactionController extends Controller
         }
     }
 
-    /**
-     * POST /api/transactions/import
-     * Nhận file CSV, lưu vào storage rồi đẩy job vào hàng đợi xử lý
-     */
-    public function requestImport(Request $request): JsonResponse
-    {
-        try {
-            $userId = $request->attributes->get('user_id');
-            if (!$userId) {
-                return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
-            }
-
-            $request->validate([
-                'file' => 'required|file|mimes:csv,txt|max:10240', // tối đa 10MB
-            ]);
-
-            // Lưu file tạm vào storage
-            $diskName  = config('filesystems.default') === 's3' ? 's3' : 'public';
-            $disk = Storage::disk($diskName);
-            $filePath  = $request->file('file')->store("imports/{$userId}", $diskName);
-            
-            if ($diskName === 's3') {
-                $fileUrl = $disk->temporaryUrl($filePath, now()->addDays(7));
-            } else {
-                $fileUrl = $disk->url($filePath);
-            }
-
-            // Tạo bản ghi import_jobs với trạng thái pending sử dụng Eloquent
-            $import = ImportJob::create([
-                'user_id'     => $userId,
-                'file_url'    => $fileUrl,
-                'status'      => 'pending',
-                'total_rows'  => 0,
-                'success_rows'=> 0,
-                'failed_rows' => 0,
-            ]);
-
-            // Đẩy job vào hàng đợi
-            ImportTransactionsJob::dispatch($userId, $import->id, $filePath);
-
-            return response()->json([
-                'status'    => 'success',
-                'message'   => 'File đã được tải lên và đang được xử lý trong hàng đợi.',
-                'import_id' => $import->id,
-            ], 202);
-
-        } catch (\Throwable $e) {
-            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 400);
-        }
-    }
-
-    /**
-     * GET /api/transactions/imports
-     * Lấy danh sách lịch sử nhập file của người dùng
-     */
-    public function listImports(Request $request): JsonResponse
-    {
-        try {
-            $userId = $request->attributes->get('user_id');
-            if (!$userId) {
-                return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
-            }
-
-            $imports = ImportJob::where('user_id', $userId)
-                ->orderBy('created_at', 'desc')
-                ->paginate(10);
-
-            return response()->json([
-                'status' => 'success',
-                'data'   => $imports->items(),
-                'pagination' => [
-                    'total'        => $imports->total(),
-                    'per_page'     => $imports->perPage(),
-                    'current_page' => $imports->currentPage(),
-                    'last_page'    => $imports->lastPage(),
-                ],
-            ], 200);
-
-        } catch (\Throwable $e) {
-            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
-        }
-    }
 }

@@ -47,8 +47,6 @@ Route::middleware(['custom.auth'])->group(function () {
     // Module 7: Export / Import giao dịch (Queue-based) - Phải đặt trước {id} để tránh bị trùng route
     Route::post('/transactions/export', [TransactionController::class, 'requestExport']);
     Route::get('/transactions/exports', [TransactionController::class, 'listExports']);
-    Route::post('/transactions/import', [TransactionController::class, 'requestImport']);
-    Route::get('/transactions/imports', [TransactionController::class, 'listImports']);
 
     Route::get('/transactions/{id}', [TransactionController::class, 'show']);
     Route::post('/transactions/{id}', [TransactionController::class, 'update']);
