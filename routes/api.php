@@ -89,6 +89,7 @@ Route::middleware(['custom.auth'])->group(function () {
     Route::post('/categories/merge', [CategoryController::class, 'merge']);
     Route::post('/categories/{id}', [CategoryController::class, 'update']);
     Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
+    Route::post('/ai/classify-category', [CategoryController::class, 'classifyCategory']);
 
     // Budget routes
     Route::get('/budgets', [BudgetController::class, 'index']);
