@@ -165,4 +165,85 @@ class ActiveSessionTest extends TestCase
             'revoked_at' => null
         ]);
     }
+
+    /**
+     * Test 3: Đăng nhập từ thiết bị mới sẽ thu hồi các phiên đăng nhập cũ
+     */
+    public function test_login_from_new_device_revokes_old_sessions()
+    {
+        // 1. Tạo một tài khoản user hoàn chỉnh có mật khẩu
+        $email = 'single_session_' . uniqid() . '@example.com';
+        $password = 'SecretPassword123';
+        $userId = (string) Str::uuid7();
+
+        DB::table('users')->insert([
+            'user_id' => $userId,
+            'email' => $email,
+            'status' => 'active',
+            'email_verified_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        DB::table('user_credentials')->insert([
+            'user_id' => $userId,
+            'password_hash' => \Illuminate\Support\Facades\Hash::make($password)
+        ]);
+
+        DB::table('user_profiles')->insert([
+            'user_id' => $userId,
+            'full_name' => 'Single Session User',
+            'created_at' => now()
+        ]);
+
+        DB::table('user_preferences')->insert([
+            'user_id' => $userId,
+            'language' => 'vi',
+            'theme' => 'light',
+            'currency' => 'VND',
+            'timezone' => 'Asia/Ho_Chi_Minh',
+            'financial_start_day' => 1,
+            'created_at' => now()
+        ]);
+
+        // 2. Thiết bị A đăng nhập lần đầu
+        $loginAResponse = $this->postJson('/api/login', [
+            'email' => $email,
+            'password' => $password
+        ], [
+            'User-Agent' => 'Device A Browser'
+        ]);
+
+        $loginAResponse->assertStatus(200);
+        $tokenA = $loginAResponse->json('access_token');
+
+        // Gửi request bằng Token A -> Thành công (200)
+        $profileResponse = $this->getJson('/api/user/profile', [
+            'Authorization' => 'Bearer ' . $tokenA
+        ]);
+        $profileResponse->assertStatus(200);
+
+        // 3. Thiết bị B đăng nhập lần thứ hai
+        $loginBResponse = $this->postJson('/api/login', [
+            'email' => $email,
+            'password' => $password
+        ], [
+            'User-Agent' => 'Device B Browser'
+        ]);
+
+        $loginBResponse->assertStatus(200);
+        $tokenB = $loginBResponse->json('access_token');
+
+        // Gửi request bằng Token A -> Phải thất bại (401) vì đã bị thu hồi
+        $profileResponseA = $this->getJson('/api/user/profile', [
+            'Authorization' => 'Bearer ' . $tokenA
+        ]);
+        $profileResponseA->assertStatus(401);
+
+        // Gửi request bằng Token B -> Vẫn thành công (200)
+        $profileResponseB = $this->getJson('/api/user/profile', [
+            'Authorization' => 'Bearer ' . $tokenB
+        ]);
+        $profileResponseB->assertStatus(200);
+    }
 }

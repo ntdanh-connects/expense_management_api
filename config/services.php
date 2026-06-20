@@ -57,5 +57,12 @@ return [
         'project_id' => env('FIREBASE_PROJECT_ID'),
     ],
 
+    'vietinbank' => [
+        'base_url' => env('VIETINBANK_BASE_URL', 'https://sandbox.vietinbank.vn/vtb/openbanking'),
+        'client_id' => env('VIETINBANK_CLIENT_ID', ''),
+        'client_secret' => env('VIETINBANK_CLIENT_SECRET', ''),
+        'inquiry_endpoint' => env('VIETINBANK_INQUIRY_ENDPOINT', '/accounts/inquiry'),
+    ],
+
 ];
 

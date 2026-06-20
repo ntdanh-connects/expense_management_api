@@ -119,6 +119,9 @@ Route::middleware(['custom.auth'])->group(function () {
     Route::post('/user/device-token', [DeviceTokenController::class, 'register']);
     Route::delete('/user/device-token', [DeviceTokenController::class, 'unregister']);
 
+    // Giả lập Sandbox (VietinBank Simulator)
+    Route::post('/sandbox/simulate-transfer', [\App\Http\Controllers\SandboxController::class, 'simulateTransfer']);
+
     //Logut and logout all
     Route::post('/logout',[AuthController::class, 'logout']);
     Route::post('/logout-all',[AuthController::class, 'logoutAllDevices']);

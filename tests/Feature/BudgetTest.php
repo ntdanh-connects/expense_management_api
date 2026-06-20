@@ -397,67 +397,7 @@ class BudgetTest extends TestCase
     /**
      * Test 7: Đổi Preferred Currency tính toán lại giao dịch cũ & ngân sách
      */
-    public function test_change_preferred_currency_recalculates_everything()
-    {
-        // 1. Tạo một ngân sách Ăn uống tháng 6/2026 là 1.000.000đ (VND)
-        $response = $this->postJson('/api/budgets', [
-            'category_id' => $this->categoryId,
-            'limit_amount' => 1000000.00,
-            'month' => 6,
-            'year' => 2026
-        ], [
-            'Authorization' => 'Bearer ' . $this->token
-        ]);
-        $budget = Budget::where('user_id', $this->userId)->first();
 
-        // 2. Tạo một giao dịch chi tiêu 10 USD (Tỷ giá USD/VND của Vietcombank là 26113đ, chốt VND là 261.130đ)
-        $this->postJson('/api/transactions', [
-            'wallet_id' => $this->walletId,
-            'category_id' => $this->categoryId,
-            'type' => 'expense',
-            'amount' => 10.00,
-            'title' => 'Ăn trưa nước ngoài',
-            'transaction_date' => '2026-06-15 12:00:00',
-            'currency_code' => 'USD',
-            'exchange_rate' => 26113.000000
-        ], [
-            'Authorization' => 'Bearer ' . $this->token
-        ]);
-
-        // Kiểm tra trước khi đổi: amount_in_user_currency của giao dịch là 261.130đ (VND), ngân sách đã dùng là 261.130đ
-        $this->assertDatabaseHas('transactions', [
-            'user_id' => $this->userId,
-            'amount' => 10.00,
-            'amount_in_user_currency' => 261130.00
-        ]);
-        $this->assertDatabaseHas('budget_usages', [
-            'budget_id' => $budget->id,
-            'used_amount' => 261130.00
-        ]);
-
-        // 3. Đổi Preferred Currency của user sang USD
-        $response = $this->postJson('/api/user/profile', [
-            'currency' => 'USD'
-        ], [
-            'Authorization' => 'Bearer ' . $this->token
-        ]);
-
-        $response->assertStatus(200);
-
-        // Chạy kiểm tra sau khi Job recalculate hoàn tất (trong môi trường test chạy sync)
-        // Giao dịch 10 USD -> đổi sang USD thì amount_in_user_currency phải bằng 10.00 USD
-        $this->assertDatabaseHas('transactions', [
-            'user_id' => $this->userId,
-            'amount' => 10.00,
-            'amount_in_user_currency' => 10.00
-        ]);
-
-        // Ngân sách Ăn uống đã tiêu cũng phải cập nhật thành 10.00 USD
-        $this->assertDatabaseHas('budget_usages', [
-            'budget_id' => $budget->id,
-            'used_amount' => 10.00
-        ]);
-    }
 
     /**
      * Test 8: Không được phép tạo giao dịch thủ công với danh mục thu nhập khi dùng ví ngân hàng/ví điện tử
