@@ -39,5 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('notification:financial-month-start')->dailyAt('08:00');
         // Cập nhật tỷ giá hối đoái ngầm từ Vietcombank & Frankfurter mỗi giờ
         $schedule->command('rates:update')->hourly();
+        // Tích lũy tự động heo đất hàng ngày lúc 01:00
+        $schedule->command('savings:auto-accumulate')->dailyAt('01:00');
     })->create();
 
