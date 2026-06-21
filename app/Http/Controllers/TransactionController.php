@@ -75,6 +75,7 @@ class TransactionController extends Controller
             }
 
             $validated = $request->validate([
+                'id'               => 'nullable|uuid',
                 'wallet_id'        => 'required|uuid',
                 'category_id'      => 'nullable|uuid',
                 'payee_id'         => 'nullable|uuid|exists:saved_payees,id',
