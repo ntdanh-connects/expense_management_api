@@ -209,6 +209,10 @@ class SavingsController extends Controller
                 return ['goal' => $goal, 'savings_tx' => $savingsTx];
             });
 
+            $result['goal']->load(['sourceWallet:id,name', 'transactions' => function ($query) {
+                $query->orderBy('transaction_date', 'desc');
+            }]);
+
             return response()->json([
                 'status'  => 'success',
                 'message' => 'Nạp tiền vào mục tiêu tiết kiệm thành công.',
@@ -308,6 +312,10 @@ class SavingsController extends Controller
 
                 return ['goal' => $goal, 'savings_tx' => $savingsTx];
             });
+
+            $result['goal']->load(['sourceWallet:id,name', 'transactions' => function ($query) {
+                $query->orderBy('transaction_date', 'desc');
+            }]);
 
             return response()->json([
                 'status'  => 'success',
