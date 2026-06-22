@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 
 class AiChatController extends Controller
 {
@@ -38,7 +39,54 @@ class AiChatController extends Controller
             $userId = $user ? $user->user_id : '00000000-0000-0000-0000-000000000000';
         }
 
-        // 1. Database Schema
+        // 1. Lấy thông tin tài chính nền của người dùng (Proactive Context)
+        $currentMonth = now()->month;
+        $currentYear = now()->year;
+        
+        $budgetSummary = DB::table('budgets')
+            ->join('budget_usages', 'budgets.id', '=', 'budget_usages.budget_id')
+            ->join('categories', 'budgets.category_id', '=', 'categories.id')
+            ->where('budgets.user_id', $userId)
+            ->where('budgets.month', $currentMonth)
+            ->where('budgets.year', $currentYear)
+            ->select('categories.name as category_name', 'budgets.limit_amount', 'budget_usages.used_amount')
+            ->get();
+
+        $budgetContext = "";
+        if ($budgetSummary->isNotEmpty()) {
+            $budgetContext = "Ngân sách tháng {$currentMonth}/{$currentYear} của người dùng:\n";
+            foreach ($budgetSummary as $b) {
+                $percentage = $b->limit_amount > 0 ? round(($b->used_amount / $b->limit_amount) * 100, 1) : 0;
+                $budgetContext .= "- Danh mục '{$b->category_name}': Hạn mức " . number_format($b->limit_amount) . " VND, đã chi " . number_format($b->used_amount) . " VND ({$percentage}%).\n";
+            }
+        } else {
+            $budgetContext = "Người dùng chưa thiết lập ngân sách chi tiêu nào cho tháng {$currentMonth}/{$currentYear}.\n";
+        }
+
+        $savingGoals = DB::table('savings_goals')
+            ->where('user_id', $userId)
+            ->where('status', 'active')
+            ->select('name', 'target_amount', 'current_amount')
+            ->get();
+
+        $goalsContext = "";
+        if ($savingGoals->isNotEmpty()) {
+            $goalsContext = "Các mục tiêu tiết kiệm đang hoạt động của người dùng:\n";
+            foreach ($savingGoals as $g) {
+                $percentage = $g->target_amount > 0 ? round(($g->current_amount / $g->target_amount) * 100, 1) : 0;
+                $goalsContext .= "- Mục tiêu '{$g->name}': Đã tích lũy " . number_format($g->current_amount) . " / " . number_format($g->target_amount) . " VND ({$percentage}%).\n";
+            }
+        } else {
+            $goalsContext = "Người dùng không có mục tiêu tiết kiệm nào đang hoạt động.\n";
+        }
+
+        $proactiveContext = "\n\n--- THÔNG TIN NỀN TÀI CHÍNH CỦA NGƯỜI DÙNG ---\n"
+            . $budgetContext
+            . $goalsContext
+            . "--------------------------------------------\n"
+            . "Hãy chủ động sử dụng các thông tin nền trên để đưa ra các phân tích, cảnh báo hoặc gợi ý tiết kiệm cá nhân hóa, thực tế khi người dùng hỏi các câu hỏi liên quan đến tình hình tài chính hoặc lời khuyên chi tiêu.";
+
+        // 2. Database Schema và System Instructions
         $systemInstruction = "Bạn là chuyên gia phân tích dữ liệu tài chính SQL. "
             . "Nhiệm vụ của bạn là nhận câu hỏi tự nhiên của người dùng và chuyển thành câu lệnh SQL PostgreSQL phù hợp.\n\n"
             . "Dưới đây là cấu trúc cơ sở dữ liệu (Database Schema):\n"
@@ -108,13 +156,26 @@ class AiChatController extends Controller
             . "   `AND (transactions.source_type != 'transfer' OR transactions.source_type IS NULL OR transactions.source_id NOT IN (SELECT wt.id FROM wallet_transfers wt JOIN wallets fw ON wt.from_wallet_id = fw.id JOIN wallets tw ON wt.to_wallet_id = tw.id WHERE fw.user_id = tw.user_id))`\n"
             . "5. THỜI GIAN & MÚI GIỜ: Ngày tháng trong `transaction_date` lưu theo giờ UTC. Người dùng ở múi giờ 'Asia/Ho_Chi_Minh' (+07:00). Khi tính theo tháng hiện tại, hãy dùng: `WHERE transaction_date >= DATE_TRUNC('month', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh' AND transaction_date < DATE_TRUNC('month', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh' + INTERVAL '1 month'` hoặc truy vấn tương đương.\n"
             . "6. Chỉ tạo câu lệnh SELECT an toàn. Không thực hiện các hành động sửa đổi cấu trúc hay dữ liệu.\n"
-            . "7. XỬ LÝ LỖI GÕ PHÍM & TỪ VIẾT TẮT TIẾNG VIỆT: Người dùng thường nhắn tin nhanh bằng tiếng Việt không dấu, viết tắt (tui -> tôi, ko/k -> không, vs -> với) hoặc lỗi gõ Telex (ví dụ: gõ 'gì' thành 'gif' do phím f là dấu huyền nhưng chưa bật Telex, hoặc 'tiêu' thành 'tieeu', 'nhiều' thành 'nhieeu'). Bạn PHẢI tự động suy luận và chuẩn hóa các lỗi gõ Telex/từ viết tắt này thành nghĩa chuẩn tiếng Việt trước khi tạo câu lệnh SQL (ví dụ: 'tiêu vào cái gif nhiều nhất' thực chất nghĩa là 'tiêu vào cái gì nhiều nhất', bạn phải tạo SQL truy vấn tổng quát tìm danh mục chi tiêu nhiều nhất chứ không được lọc theo từ khóa 'gif').\n"
+            . "7. XỬ LÝ LỖI GÕ PHÍM & TỪ VIẾT TẮT TIẾNG VIỆT: Tự động suy luận và chuẩn hóa các lỗi gõ Telex/từ viết tắt này thành nghĩa chuẩn tiếng Việt trước khi tạo câu lệnh SQL (ví dụ: 'tiêu vào cái gif nhiều nhất' -> 'tiêu vào cái gì nhiều nhất').\n"
             . "8. XỬ LÝ YÊU CẦU TÓM TẮT/BÁO CÁO CHI TIÊU: Khi người dùng yêu cầu 'tóm tắt chi tiêu' hoặc 'báo cáo chi tiêu' (theo tuần, tháng, v.v.), bạn KHÔNG ĐƯỢC chỉ truy vấn tổng số tiền (SUM). Thay vào đó, bạn PHẢI truy vấn số tiền chi tiêu được nhóm theo từng danh mục (GROUP BY tên danh mục và tính SUM số tiền, sắp xếp giảm dần) hoặc lấy danh sách các giao dịch chi tiết để có dữ liệu phân tích cụ thể.\n"
             . "9. KHÔNG TRẢ VỀ SQL THÔ: Bạn KHÔNG ĐƯỢC phép trả về câu lệnh SQL thô dưới dạng văn bản (text) trực tiếp cho người dùng. Bạn bắt buộc phải gọi công cụ `execute_sql_query` để thực thi câu lệnh SQL đó.\n"
-            . "10. TUYỆT ĐỐI CẤM HIỂN THỊ TRUY VẤN: Bạn tuyệt đối KHÔNG ĐƯỢC phép nhắc đến câu lệnh SQL, mã nguồn SQL, bảng biểu SQL hay bất kỳ cú pháp truy vấn nào (ví dụ: SELECT, FROM, WHERE, v.v.) trong phản hồi văn bản cuối cùng gửi cho người dùng. Không giải thích hay hiển thị câu lệnh SQL đã sử dụng. Người dùng chỉ quan tâm đến kết quả phân tích số liệu thực tế được trả về từ cơ sở dữ liệu.\n\n"
-            . "- Sử dụng công cụ `execute_sql_query` để thực thi câu lệnh SQL PostgreSQL hợp lệ.";
+            . "10. TUYỆT ĐỐI CẤM HIỂN THỊ TRUY VẤN: Bạn tuyệt đối KHÔNG ĐƯỢC phép nhắc đến câu lệnh SQL, mã nguồn SQL, bảng biểu SQL hay bất kỳ cú pháp truy vấn nào (ví dụ: SELECT, FROM, WHERE, v.v.) trong phản hồi văn bản cuối cùng gửi cho người dùng. Không giải thích hay hiển thị câu lệnh SQL đã sử dụng.\n\n"
+            . "YÊU CẦU ĐỊNH DẠNG ĐẦU RA (JSON MODE):\n"
+            . "Khi trả về câu trả lời cuối cùng cho người dùng (sau khi đã có kết quả SQL hoặc đối thoại bình thường), bạn BẮT BUỘC phải trả về định dạng JSON hợp lệ chứa các trường sau:\n"
+            . "{\n"
+            . "  \"answer\": \"Nội dung câu trả lời hoàn chỉnh, chi tiết bằng tiếng Việt. Không chứa markdown JSON hay thẻ ```json, chỉ trả về chuỗi JSON thô.\",\n"
+            . "  \"insight\": \"Lời khuyên tài chính ngắn gọn, cá nhân hóa dựa trên dữ liệu ngân sách hoặc mục tiêu tiết kiệm của người dùng (ví dụ: khuyên tiết kiệm, cảnh báo chi tiêu). Nếu không có insight nào phù hợp, đặt giá trị null.\",\n"
+            . "  \"suggested_questions\": [\n"
+            . "     \"Câu hỏi gợi ý 1 liên quan mật thiết đến chủ đề đang trò chuyện,\",\n"
+            . "     \"Câu hỏi gợi ý 2\",\n"
+            . "     \"Câu hỏi gợi ý 3\"\n"
+            . "  ]\n"
+            . "}\n"
+            . "Lưu ý: suggested_questions phải chứa chính xác 3 câu hỏi gợi ý tiếp theo có ích nhất cho người dùng.\n\n"
+            . "- Sử dụng công cụ `execute_sql_query` để thực thi câu lệnh SQL PostgreSQL hợp lệ."
+            . $proactiveContext;
 
-        // 2. Định nghĩa Tool
+        // 3. Định nghĩa Tool
         $tools = [
             [
                 'function_declarations' => [
@@ -136,21 +197,81 @@ class AiChatController extends Controller
             ]
         ];
 
-        // 3. Gọi Gemini API (lượt 1)
+        // 4. Lấy lịch sử hội thoại gần nhất của user
+        $history = DB::table('ai_chat_messages')
+            ->where('user_id', $userId)
+            ->orderBy('created_at', 'desc')
+            ->take(15)
+            ->get()
+            ->reverse();
+
+        $contents = [];
+        foreach ($history as $msg) {
+            if ($msg->role === 'user') {
+                $contents[] = [
+                    'role' => 'user',
+                    'parts' => [['text' => $msg->content]]
+                ];
+            } elseif ($msg->role === 'model') {
+                if ($msg->function_name) {
+                    $contents[] = [
+                        'role' => 'model',
+                        'parts' => [[
+                            'functionCall' => [
+                                'name' => $msg->function_name,
+                                'args' => json_decode($msg->content, true) ?: []
+                            ]
+                        ]]
+                    ];
+                } else {
+                    $contents[] = [
+                        'role' => 'model',
+                        'parts' => [['text' => $msg->content]]
+                    ];
+                }
+            } elseif ($msg->role === 'function') {
+                $contents[] = [
+                    'role' => 'user',
+                    'parts' => [[
+                        'functionResponse' => [
+                            'name' => $msg->function_name,
+                            'response' => [
+                                'result' => json_decode($msg->content, true) ?: []
+                            ]
+                        ]
+                    ]]
+                ];
+            }
+        }
+
+        // Thêm tin nhắn hiện tại của người dùng vào cuối contents và lưu DB
+        $contents[] = [
+            'role' => 'user',
+            'parts' => [['text' => $prompt]]
+        ];
+
+        DB::table('ai_chat_messages')->insert([
+            'id' => (string) Str::uuid(),
+            'user_id' => $userId,
+            'role' => 'user',
+            'content' => $prompt,
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        // 5. Gọi Gemini API (lượt 1)
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}";
         
         $payload = [
-            'contents' => [
-                [
-                    'role' => 'user',
-                    'parts' => [['text' => $prompt]]
-                ]
-            ],
+            'contents' => $contents,
             'tools' => $tools,
             'system_instruction' => [
                 'parts' => [
                     ['text' => $systemInstruction]
                 ]
+            ],
+            'generationConfig' => [
+                'responseMimeType' => 'application/json',
             ]
         ];
 
@@ -177,7 +298,7 @@ class AiChatController extends Controller
             $sqlQuery = null;
             $dbResults = [];
 
-            // 4. Nếu AI yêu cầu gọi Tool
+            // 6. Nếu AI yêu cầu gọi Tool
             if (isset($part['functionCall'])) {
                 $functionCall = $part['functionCall'];
                 $functionName = $functionCall['name'];
@@ -192,6 +313,17 @@ class AiChatController extends Controller
                     ], 403);
                 }
 
+                // Lưu model functionCall vào DB
+                DB::table('ai_chat_messages')->insert([
+                    'id' => (string) Str::uuid(),
+                    'user_id' => $userId,
+                    'role' => 'model',
+                    'content' => json_encode($args, JSON_UNESCAPED_UNICODE),
+                    'function_name' => $functionName,
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+
                 // Thực thi SQL
                 try {
                     $dbResults = DB::select($sqlQuery);
@@ -199,36 +331,47 @@ class AiChatController extends Controller
                     $dbResults = ['error' => $e->getMessage()];
                 }
 
+                // Lưu functionResponse vào DB
+                DB::table('ai_chat_messages')->insert([
+                    'id' => (string) Str::uuid(),
+                    'user_id' => $userId,
+                    'role' => 'function',
+                    'content' => json_encode($dbResults, JSON_UNESCAPED_UNICODE),
+                    'function_name' => $functionName,
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+
                 // Gửi ngược kết quả cho Gemini (lượt 2)
-                $finalPayload = [
-                    'contents' => [
+                $finalContents = $contents;
+                $finalContents[] = [
+                    'role' => 'model',
+                    'parts' => [$part]
+                ];
+                $finalContents[] = [
+                    'role' => 'user',
+                    'parts' => [
                         [
-                            'role' => 'user',
-                            'parts' => [['text' => $prompt]]
-                        ],
-                        [
-                            'role' => 'model',
-                            'parts' => [$part]
-                        ],
-                        [
-                            'role' => 'user',
-                            'parts' => [
-                                [
-                                    'functionResponse' => [
-                                        'name' => $functionName,
-                                        'response' => [
-                                            'result' => $dbResults
-                                        ]
-                                    ]
+                            'functionResponse' => [
+                                'name' => $functionName,
+                                'response' => [
+                                    'result' => $dbResults
                                 ]
                             ]
                         ]
-                    ],
+                    ]
+                ];
+
+                $finalPayload = [
+                    'contents' => $finalContents,
                     'tools' => $tools,
                     'system_instruction' => [
                         'parts' => [
                             ['text' => $systemInstruction]
                         ]
+                    ],
+                    'generationConfig' => [
+                        'responseMimeType' => 'application/json',
                     ]
                 ];
 
@@ -244,7 +387,22 @@ class AiChatController extends Controller
                 }
 
                 $finalResult = $finalResponse->json();
-                $outputText = $finalResult['candidates'][0]['content']['parts'][0]['text'] ?? 'Không có câu trả lời.';
+                $outputText = $finalResult['candidates'][0]['content']['parts'][0]['text'] ?? '{"answer": "Không có câu trả lời."}';
+
+                // Lưu model finalResponse vào DB
+                DB::table('ai_chat_messages')->insert([
+                    'id' => (string) Str::uuid(),
+                    'user_id' => $userId,
+                    'role' => 'model',
+                    'content' => $outputText,
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+
+                $geminiResponse = json_decode($outputText, true);
+                $answer = $geminiResponse['answer'] ?? $outputText;
+                $insight = $geminiResponse['insight'] ?? null;
+                $suggestedQuestions = $geminiResponse['suggested_questions'] ?? [];
 
                 return response()->json([
                     'success' => true,
@@ -253,11 +411,29 @@ class AiChatController extends Controller
                     'model' => $model,
                     'sql_query' => $sqlQuery,
                     'db_results' => $dbResults,
-                    'response' => $outputText
+                    'answer' => $answer,
+                    'insight' => $insight,
+                    'suggested_questions' => $suggestedQuestions
                 ]);
 
             } else {
                 // Nếu AI phản hồi trực tiếp không qua tool
+                $rawText = $part['text'] ?? '{"answer": "Không có câu trả lời."}';
+
+                DB::table('ai_chat_messages')->insert([
+                    'id' => (string) Str::uuid(),
+                    'user_id' => $userId,
+                    'role' => 'model',
+                    'content' => $rawText,
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+
+                $geminiResponse = json_decode($rawText, true);
+                $answer = $geminiResponse['answer'] ?? $rawText;
+                $insight = $geminiResponse['insight'] ?? null;
+                $suggestedQuestions = $geminiResponse['suggested_questions'] ?? [];
+
                 return response()->json([
                     'success' => true,
                     'user_id' => $userId,
@@ -265,7 +441,9 @@ class AiChatController extends Controller
                     'model' => $model,
                     'sql_query' => null,
                     'db_results' => [],
-                    'response' => $part['text'] ?? 'Không có câu trả lời.'
+                    'answer' => $answer,
+                    'insight' => $insight,
+                    'suggested_questions' => $suggestedQuestions
                 ]);
             }
 
