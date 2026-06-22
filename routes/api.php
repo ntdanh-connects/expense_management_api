@@ -16,6 +16,7 @@ use App\Http\Controllers\CronController;
 use App\Http\Controllers\DeviceTokenController;
 use App\Http\Controllers\QrTransferController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\SavingsController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::get('/verify-email/{id}/{hash}', [AuthController::class, 'verify'])
@@ -126,6 +127,14 @@ Route::middleware(['custom.auth'])->group(function () {
 
     // Giả lập Sandbox (VietinBank Simulator)
     Route::post('/sandbox/simulate-transfer', [\App\Http\Controllers\SandboxController::class, 'simulateTransfer']);
+
+    // Ví tiết kiệm mục tiêu (Savings Goals)
+    Route::get('/savings', [SavingsController::class, 'index']);
+    Route::post('/savings', [SavingsController::class, 'store']);
+    Route::get('/savings/{id}', [SavingsController::class, 'show']);
+    Route::post('/savings/{id}/deposit', [SavingsController::class, 'deposit']);
+    Route::post('/savings/{id}/withdraw', [SavingsController::class, 'withdraw']);
+    Route::delete('/savings/{id}', [SavingsController::class, 'destroy']);
 
     //Logut and logout all
     Route::post('/logout',[AuthController::class, 'logout']);

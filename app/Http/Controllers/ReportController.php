@@ -51,14 +51,21 @@ class ReportController extends Controller
                         $sub->where('transactions.source_type', '=', 'transfer')
                             ->where(function ($inner) {
                                 $inner->whereNull('transactions.source_id')
-                                    ->orWhereNotExists(function ($existsQuery) {
-                                        $existsQuery->select(DB::raw(1))
-                                            ->from('wallet_transfers as wt')
-                                            ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
-                                            ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
-                                            ->whereColumn('wt.id', 'transactions.source_id')
-                                            ->whereColumn('fw.user_id', 'tw.user_id');
-                                    });
+                                        ->orWhere(function ($orQuery) {
+                                            $orQuery->whereNotExists(function ($existsQuery) {
+                                                $existsQuery->select(DB::raw(1))
+                                                    ->from('wallet_transfers as wt')
+                                                    ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
+                                                    ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
+                                                    ->whereColumn('wt.id', 'transactions.source_id')
+                                                    ->whereColumn('fw.user_id', 'tw.user_id');
+                                            })
+                                            ->whereNotExists(function ($existsQuery) {
+                                                $existsQuery->select(DB::raw(1))
+                                                    ->from('savings_goals as sg')
+                                                    ->whereColumn('sg.id', 'transactions.source_id');
+                                            });
+                                        });
                             });
                     });
                 })
@@ -147,14 +154,21 @@ class ReportController extends Controller
                         $sub->where('transactions.source_type', '=', 'transfer')
                             ->where(function ($inner) {
                                 $inner->whereNull('transactions.source_id')
-                                    ->orWhereNotExists(function ($existsQuery) {
-                                        $existsQuery->select(DB::raw(1))
-                                            ->from('wallet_transfers as wt')
-                                            ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
-                                            ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
-                                            ->whereColumn('wt.id', 'transactions.source_id')
-                                            ->whereColumn('fw.user_id', 'tw.user_id');
-                                    });
+                                        ->orWhere(function ($orQuery) {
+                                            $orQuery->whereNotExists(function ($existsQuery) {
+                                                $existsQuery->select(DB::raw(1))
+                                                    ->from('wallet_transfers as wt')
+                                                    ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
+                                                    ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
+                                                    ->whereColumn('wt.id', 'transactions.source_id')
+                                                    ->whereColumn('fw.user_id', 'tw.user_id');
+                                            })
+                                            ->whereNotExists(function ($existsQuery) {
+                                                $existsQuery->select(DB::raw(1))
+                                                    ->from('savings_goals as sg')
+                                                    ->whereColumn('sg.id', 'transactions.source_id');
+                                            });
+                                        });
                             });
                     });
                 })
@@ -183,14 +197,21 @@ class ReportController extends Controller
                         $sub->where('transactions.source_type', '=', 'transfer')
                             ->where(function ($inner) {
                                 $inner->whereNull('transactions.source_id')
-                                    ->orWhereNotExists(function ($existsQuery) {
-                                        $existsQuery->select(DB::raw(1))
-                                            ->from('wallet_transfers as wt')
-                                            ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
-                                            ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
-                                            ->whereColumn('wt.id', 'transactions.source_id')
-                                            ->whereColumn('fw.user_id', 'tw.user_id');
-                                    });
+                                        ->orWhere(function ($orQuery) {
+                                            $orQuery->whereNotExists(function ($existsQuery) {
+                                                $existsQuery->select(DB::raw(1))
+                                                    ->from('wallet_transfers as wt')
+                                                    ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
+                                                    ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
+                                                    ->whereColumn('wt.id', 'transactions.source_id')
+                                                    ->whereColumn('fw.user_id', 'tw.user_id');
+                                            })
+                                            ->whereNotExists(function ($existsQuery) {
+                                                $existsQuery->select(DB::raw(1))
+                                                    ->from('savings_goals as sg')
+                                                    ->whereColumn('sg.id', 'transactions.source_id');
+                                            });
+                                        });
                             });
                     });
                 })
@@ -300,14 +321,21 @@ class ReportController extends Controller
                         $sub->where('transactions.source_type', '=', 'transfer')
                             ->where(function ($inner) {
                                 $inner->whereNull('transactions.source_id')
-                                    ->orWhereNotExists(function ($existsQuery) {
-                                        $existsQuery->select(DB::raw(1))
-                                            ->from('wallet_transfers as wt')
-                                            ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
-                                            ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
-                                            ->whereColumn('wt.id', 'transactions.source_id')
-                                            ->whereColumn('fw.user_id', 'tw.user_id');
-                                    });
+                                        ->orWhere(function ($orQuery) {
+                                            $orQuery->whereNotExists(function ($existsQuery) {
+                                                $existsQuery->select(DB::raw(1))
+                                                    ->from('wallet_transfers as wt')
+                                                    ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
+                                                    ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
+                                                    ->whereColumn('wt.id', 'transactions.source_id')
+                                                    ->whereColumn('fw.user_id', 'tw.user_id');
+                                            })
+                                            ->whereNotExists(function ($existsQuery) {
+                                                $existsQuery->select(DB::raw(1))
+                                                    ->from('savings_goals as sg')
+                                                    ->whereColumn('sg.id', 'transactions.source_id');
+                                            });
+                                        });
                             });
                     });
                 })
@@ -427,14 +455,21 @@ class ReportController extends Controller
                         $sub->where('transactions.source_type', '=', 'transfer')
                             ->where(function ($inner) {
                                 $inner->whereNull('transactions.source_id')
-                                    ->orWhereNotExists(function ($existsQuery) {
-                                        $existsQuery->select(DB::raw(1))
-                                            ->from('wallet_transfers as wt')
-                                            ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
-                                            ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
-                                            ->whereColumn('wt.id', 'transactions.source_id')
-                                            ->whereColumn('fw.user_id', 'tw.user_id');
-                                     });
+                                    ->orWhere(function ($orQuery) {
+                                        $orQuery->whereNotExists(function ($existsQuery) {
+                                            $existsQuery->select(DB::raw(1))
+                                                ->from('wallet_transfers as wt')
+                                                ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
+                                                ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
+                                                ->whereColumn('wt.id', 'transactions.source_id')
+                                                ->whereColumn('fw.user_id', 'tw.user_id');
+                                        })
+                                        ->whereNotExists(function ($existsQuery) {
+                                            $existsQuery->select(DB::raw(1))
+                                                ->from('savings_goals as sg')
+                                                ->whereColumn('sg.id', 'transactions.source_id');
+                                        });
+                                    });
                             });
                     });
                 })
@@ -460,14 +495,21 @@ class ReportController extends Controller
                         $sub->where('transactions.source_type', '=', 'transfer')
                             ->where(function ($inner) {
                                 $inner->whereNull('transactions.source_id')
-                                    ->orWhereNotExists(function ($existsQuery) {
-                                        $existsQuery->select(DB::raw(1))
-                                            ->from('wallet_transfers as wt')
-                                            ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
-                                            ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
-                                            ->whereColumn('wt.id', 'transactions.source_id')
-                                            ->whereColumn('fw.user_id', 'tw.user_id');
-                                    });
+                                        ->orWhere(function ($orQuery) {
+                                            $orQuery->whereNotExists(function ($existsQuery) {
+                                                $existsQuery->select(DB::raw(1))
+                                                    ->from('wallet_transfers as wt')
+                                                    ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
+                                                    ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
+                                                    ->whereColumn('wt.id', 'transactions.source_id')
+                                                    ->whereColumn('fw.user_id', 'tw.user_id');
+                                            })
+                                            ->whereNotExists(function ($existsQuery) {
+                                                $existsQuery->select(DB::raw(1))
+                                                    ->from('savings_goals as sg')
+                                                    ->whereColumn('sg.id', 'transactions.source_id');
+                                            });
+                                        });
                             });
                     });
                 })

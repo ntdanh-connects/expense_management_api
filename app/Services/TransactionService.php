@@ -51,6 +51,17 @@ class TransactionService
     public function createTransaction(string $userId, array $data, ?UploadedFile $attachment = null, ?array $attachments = null)
     {
         return DB::transaction(function () use ($userId, $data, $attachment, $attachments) {
+            // Check if transaction with this ID already exists to prevent duplicates on retry
+            if (!empty($data['id'])) {
+                $existing = Transaction::with(['category', 'wallet', 'attachments', 'payee'])
+                    ->where('id', $data['id'])
+                    ->where('user_id', $userId)
+                    ->first();
+                if ($existing) {
+                    return $existing;
+                }
+            }
+
             $walletId = $data['wallet_id'];
             $categoryId = $data['category_id'] ?? null;
             $amount = (float) $data['amount'];

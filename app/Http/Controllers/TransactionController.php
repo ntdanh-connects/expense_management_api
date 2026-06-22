@@ -75,6 +75,7 @@ class TransactionController extends Controller
             }
 
             $validated = $request->validate([
+                'id'               => 'nullable|uuid',
                 'wallet_id'        => 'required|uuid',
                 'category_id'      => 'nullable|uuid',
                 'payee_id'         => 'nullable|uuid|exists:saved_payees,id',
@@ -98,13 +99,14 @@ class TransactionController extends Controller
             }
 
             $sourceType = $validated['source_type'] ?? 'manual';
-            if (in_array($sourceType, ['manual', 'transfer']) && $wallet->type !== 'cash') {
+            $txType = $validated['type'];
+            if ($txType === 'expense' && in_array($sourceType, ['manual', 'transfer']) && $wallet->type !== 'cash') {
                 if (empty($validated['payee_id'])) {
                     return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công qua ví ngân hàng hoặc ví điện tử bắt buộc phải có người hưởng thụ.'], 400);
                 }
             }
 
-            if (in_array($sourceType, ['manual', 'transfer']) && in_array($wallet->type, ['bank', 'ewallet'])) {
+            if ($sourceType === 'manual' && in_array($wallet->type, ['bank', 'ewallet'])) {
                 if (!empty($validated['category_id'])) {
                     $category = DB::table('categories')->where('id', $validated['category_id'])->first();
                     if ($category && $category->type === 'income') {
@@ -197,14 +199,15 @@ class TransactionController extends Controller
             }
 
             $sourceType = $validated['source_type'] ?? $existingTx->source_type ?? 'manual';
-            if (in_array($sourceType, ['manual', 'transfer']) && $wallet->type !== 'cash') {
+            $txType = $validated['type'] ?? $existingTx->type;
+            if ($txType === 'expense' && in_array($sourceType, ['manual', 'transfer']) && $wallet->type !== 'cash') {
                 $payeeId = $validated['payee_id'] ?? $existingTx->payee_id;
                 if (empty($payeeId)) {
                     return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công qua ví ngân hàng hoặc ví điện tử bắt buộc phải có người hưởng thụ.'], 400);
                 }
             }
 
-            if (in_array($sourceType, ['manual', 'transfer']) && in_array($wallet->type, ['bank', 'ewallet'])) {
+            if ($sourceType === 'manual' && in_array($wallet->type, ['bank', 'ewallet'])) {
                 $categoryId = array_key_exists('category_id', $validated) ? $validated['category_id'] : $existingTx->category_id;
                 if (!empty($categoryId)) {
                     $category = DB::table('categories')->where('id', $categoryId)->first();
