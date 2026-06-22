@@ -34,6 +34,10 @@ Route::get('/cron-trigger', [CronController::class, 'trigger']);
 Route::middleware(['custom.auth'])->group(function () {
     // Trợ lý ảo AI
     Route::post('/ai-chat', [\App\Http\Controllers\AiChatController::class, 'chat']);
+    Route::get('/ai-conversations', [\App\Http\Controllers\AiChatController::class, 'listConversations']);
+    Route::get('/ai-conversations/{id}/messages', [\App\Http\Controllers\AiChatController::class, 'listMessages']);
+    Route::put('/ai-conversations/{id}', [\App\Http\Controllers\AiChatController::class, 'updateConversation']);
+    Route::delete('/ai-conversations/{id}', [\App\Http\Controllers\AiChatController::class, 'deleteConversation']);
 
     // API Aggregation cho màn hình Dashboard chính
     Route::get('/dashboard/summary', [DashboardController::class, 'summary']);

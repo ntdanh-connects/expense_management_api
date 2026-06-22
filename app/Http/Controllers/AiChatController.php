@@ -13,7 +13,8 @@ class AiChatController extends Controller
     {
         $request->validate([
             'prompt' => 'required|string',
-            'user_id' => 'nullable|string'
+            'user_id' => 'nullable|string',
+            'conversation_id' => 'nullable|uuid'
         ]);
 
         $prompt = $request->input('prompt');
@@ -37,6 +38,36 @@ class AiChatController extends Controller
         if (!$userId) {
             $user = DB::table('users')->first();
             $userId = $user ? $user->user_id : '00000000-0000-0000-0000-000000000000';
+        }
+
+        // Kiểm tra hoặc tạo cuộc hội thoại
+        $conversationId = $request->input('conversation_id');
+        if ($conversationId) {
+            $conversation = DB::table('ai_conversations')
+                ->where('id', $conversationId)
+                ->where('user_id', $userId)
+                ->first();
+
+            if (!$conversation) {
+                return response()->json([
+                    'error' => 'Cuộc hội thoại không tồn tại hoặc không thuộc quyền sở hữu của bạn.'
+                ], 404);
+            }
+
+            // Cập nhật updated_at để sắp xếp lên đầu
+            DB::table('ai_conversations')
+                ->where('id', $conversationId)
+                ->update(['updated_at' => now()]);
+        } else {
+            $conversationId = (string) Str::uuid();
+            $title = Str::limit($prompt, 40, '...');
+            DB::table('ai_conversations')->insert([
+                'id' => $conversationId,
+                'user_id' => $userId,
+                'title' => $title,
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
         }
 
         // 1. Lấy thông tin tài chính nền của người dùng (Proactive Context)
@@ -166,9 +197,9 @@ class AiChatController extends Controller
             . "   - `amount` (decimal, số tiền giao dịch)\n"
             . "   - `source_wallet_id` (uuid, ví nguồn/đích liên quan)\n"
             . "   - `transaction_date` (timestamptz)\n\n"
-             . "QUY TẮC BẮT BUỘC KHI VIẾT SQL (BẢO MẬT & ĐỘ CHÍNH XÁC):\n"
-             . "1. BẢO MẬT USER: Người dùng hiện tại có ID là: '{$userId}'. Bạn BẮT BUỘC phải lọc theo điều kiện `user_id = '{$userId}'` cho TẤT CẢ các bảng để tránh lộ dữ liệu (ví dụ: `wallets.user_id = '{$userId}'`, `transactions.user_id = '{$userId}'`, `budgets.user_id = '{$userId}'`, `recurring_rules.user_id = '{$userId}'`, `savings_goals.user_id = '{$userId}'`). Đối với các bảng liên kết như `wallet_balances`, `budget_usages` và `savings_transactions`, bạn phải join với bảng cha tương ứng để lọc theo `user_id`. LƯU Ý RIÊNG CHO BẢNG `categories`: Bảng này chứa cả danh mục hệ thống (có `user_id IS NULL`) và danh mục riêng của user, nên bạn PHẢI dùng điều kiện: `(categories.user_id = '{$userId}' OR categories.user_id IS NULL)`.\n"
-             . "2. SOFT DELETE: Chỉ lấy dữ liệu chưa xóa. Luôn thêm điều kiện `deleted_at IS NULL` cho các bảng `transactions`, `wallets`, `categories`, `recurring_rules`.\n"
+            . "QUY TẮC BẮT BUỘC KHI VIẾT SQL (BẢO MẬT & ĐỘ CHÍNH XÁC):\n"
+            . "1. BẢO MẬT USER: Người dùng hiện tại có ID là: '{$userId}'. Bạn BẮT BUỘC phải lọc theo điều kiện `user_id = '{$userId}'` cho TẤT CẢ các bảng để tránh lộ dữ liệu (ví dụ: `wallets.user_id = '{$userId}'`, `transactions.user_id = '{$userId}'`, `budgets.user_id = '{$userId}'`, `recurring_rules.user_id = '{$userId}'`, `savings_goals.user_id = '{$userId}'`). Đối với các bảng liên kết như `wallet_balances`, `budget_usages` và `savings_transactions`, bạn phải join với bảng cha tương ứng để lọc theo `user_id`. LƯU Ý RIÊNG CHO BẢNG `categories`: Bảng này chứa cả danh mục hệ thống (có `user_id IS NULL`) và danh mục riêng của user, nên bạn PHẢI dùng điều kiện: `(categories.user_id = '{$userId}' OR categories.user_id IS NULL)`.\n"
+            . "2. SOFT DELETE: Chỉ lấy dữ liệu chưa xóa. Luôn thêm điều kiện `deleted_at IS NULL` cho các bảng `transactions`, `wallets`, `categories`, `recurring_rules`.\n"
             . "3. QUY ĐỔI TIỀN TỆ: Khi tính tổng số tiền (SUM, AVG) thu nhập/chi tiêu, bạn PHẢI dùng cột `amount_in_user_currency` của bảng `transactions` thay vì cột `amount`.\n"
             . "4. LOẠI BỎ CHUYỂN KHOẢN NỘI BỘ: Khi tính tổng thu nhập hoặc chi tiêu, bạn PHẢI loại trừ các giao dịch luân chuyển nội bộ (chuyển tiền giữa các ví của chính mình). Hãy thêm điều kiện lọc sau vào câu lệnh SQL của bạn:\n"
             . "   `AND (transactions.source_type != 'transfer' OR transactions.source_type IS NULL OR transactions.source_id NOT IN (SELECT wt.id FROM wallet_transfers wt JOIN wallets fw ON wt.from_wallet_id = fw.id JOIN wallets tw ON wt.to_wallet_id = tw.id WHERE fw.user_id = tw.user_id))`\n"
@@ -215,9 +246,10 @@ class AiChatController extends Controller
             ]
         ];
 
-        // 4. Lấy lịch sử hội thoại gần nhất của user
+        // 4. Lấy lịch sử hội thoại gần nhất của cuộc trò chuyện này
         $history = DB::table('ai_chat_messages')
             ->where('user_id', $userId)
+            ->where('conversation_id', $conversationId)
             ->orderBy('created_at', 'desc')
             ->take(15)
             ->get()
@@ -271,6 +303,7 @@ class AiChatController extends Controller
         DB::table('ai_chat_messages')->insert([
             'id' => (string) Str::uuid(),
             'user_id' => $userId,
+            'conversation_id' => $conversationId,
             'role' => 'user',
             'content' => $prompt,
             'created_at' => now(),
@@ -335,6 +368,7 @@ class AiChatController extends Controller
                 DB::table('ai_chat_messages')->insert([
                     'id' => (string) Str::uuid(),
                     'user_id' => $userId,
+                    'conversation_id' => $conversationId,
                     'role' => 'model',
                     'content' => json_encode($args, JSON_UNESCAPED_UNICODE),
                     'function_name' => $functionName,
@@ -353,6 +387,7 @@ class AiChatController extends Controller
                 DB::table('ai_chat_messages')->insert([
                     'id' => (string) Str::uuid(),
                     'user_id' => $userId,
+                    'conversation_id' => $conversationId,
                     'role' => 'function',
                     'content' => json_encode($dbResults, JSON_UNESCAPED_UNICODE),
                     'function_name' => $functionName,
@@ -410,6 +445,7 @@ class AiChatController extends Controller
                 DB::table('ai_chat_messages')->insert([
                     'id' => (string) Str::uuid(),
                     'user_id' => $userId,
+                    'conversation_id' => $conversationId,
                     'role' => 'model',
                     'content' => $outputText,
                     'created_at' => now(),
@@ -424,6 +460,7 @@ class AiChatController extends Controller
                 return response()->json([
                     'success' => true,
                     'user_id' => $userId,
+                    'conversation_id' => $conversationId,
                     'prompt' => $prompt,
                     'model' => $model,
                     'sql_query' => $sqlQuery,
@@ -440,6 +477,7 @@ class AiChatController extends Controller
                 DB::table('ai_chat_messages')->insert([
                     'id' => (string) Str::uuid(),
                     'user_id' => $userId,
+                    'conversation_id' => $conversationId,
                     'role' => 'model',
                     'content' => $rawText,
                     'created_at' => now(),
@@ -454,6 +492,7 @@ class AiChatController extends Controller
                 return response()->json([
                     'success' => true,
                     'user_id' => $userId,
+                    'conversation_id' => $conversationId,
                     'prompt' => $prompt,
                     'model' => $model,
                     'sql_query' => null,
@@ -470,6 +509,146 @@ class AiChatController extends Controller
                 'message' => $e->getMessage()
             ], 500);
         }
+    }
+
+    public function listConversations(Request $request)
+    {
+        $userId = $request->attributes->get('user_id');
+        if (!$userId && $request->user()) {
+            $userId = $request->user()->user_id;
+        }
+        if (!$userId) {
+            $userId = $request->input('user_id');
+        }
+        if (!$userId) {
+            $user = DB::table('users')->first();
+            $userId = $user ? $user->user_id : '00000000-0000-0000-0000-000000000000';
+        }
+
+        $conversations = DB::table('ai_conversations')
+            ->where('user_id', $userId)
+            ->orderBy('updated_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'conversations' => $conversations
+        ]);
+    }
+
+    public function listMessages(Request $request, $id)
+    {
+        $userId = $request->attributes->get('user_id');
+        if (!$userId && $request->user()) {
+            $userId = $request->user()->user_id;
+        }
+        if (!$userId) {
+            $userId = $request->input('user_id');
+        }
+        if (!$userId) {
+            $user = DB::table('users')->first();
+            $userId = $user ? $user->user_id : '00000000-0000-0000-0000-000000000000';
+        }
+
+        $conversation = DB::table('ai_conversations')
+            ->where('id', $id)
+            ->where('user_id', $userId)
+            ->first();
+
+        if (!$conversation) {
+            return response()->json([
+                'error' => 'Cuộc hội thoại không tồn tại hoặc không thuộc quyền sở hữu của bạn.'
+            ], 404);
+        }
+
+        $messages = DB::table('ai_chat_messages')
+            ->where('conversation_id', $id)
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'conversation' => $conversation,
+            'messages' => $messages
+        ]);
+    }
+
+    public function updateConversation(Request $request, $id)
+    {
+        $request->validate([
+            'title' => 'required|string|max:255'
+        ]);
+
+        $userId = $request->attributes->get('user_id');
+        if (!$userId && $request->user()) {
+            $userId = $request->user()->user_id;
+        }
+        if (!$userId) {
+            $userId = $request->input('user_id');
+        }
+        if (!$userId) {
+            $user = DB::table('users')->first();
+            $userId = $user ? $user->user_id : '00000000-0000-0000-0000-000000000000';
+        }
+
+        $conversation = DB::table('ai_conversations')
+            ->where('id', $id)
+            ->where('user_id', $userId)
+            ->first();
+
+        if (!$conversation) {
+            return response()->json([
+                'error' => 'Cuộc hội thoại không tồn tại hoặc không thuộc quyền sở hữu của bạn.'
+            ], 404);
+        }
+
+        DB::table('ai_conversations')
+            ->where('id', $id)
+            ->update([
+                'title' => $request->input('title'),
+                'updated_at' => now()
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Cập nhật tiêu đề cuộc hội thoại thành công.'
+        ]);
+    }
+
+    public function deleteConversation(Request $request, $id)
+    {
+        $userId = $request->attributes->get('user_id');
+        if (!$userId && $request->user()) {
+            $userId = $request->user()->user_id;
+        }
+        if (!$userId) {
+            $userId = $request->input('user_id');
+        }
+        if (!$userId) {
+            $user = DB::table('users')->first();
+            $userId = $user ? $user->user_id : '00000000-0000-0000-0000-000000000000';
+        }
+
+        $conversation = DB::table('ai_conversations')
+            ->where('id', $id)
+            ->where('user_id', $userId)
+            ->first();
+
+        if (!$conversation) {
+            return response()->json([
+                'error' => 'Cuộc hội thoại không tồn tại hoặc không thuộc quyền sở hữu của bạn.'
+            ], 404);
+        }
+
+        // Xóa cứng khỏi database
+        DB::table('ai_conversations')
+            ->where('id', $id)
+            ->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Xóa cuộc hội thoại thành công.'
+        ]);
     }
 
     private function isSqlQuerySafe(string $sql): bool
