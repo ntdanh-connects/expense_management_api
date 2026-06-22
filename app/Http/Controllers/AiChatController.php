@@ -147,10 +147,28 @@ class AiChatController extends Controller
             . "   - `next_run_at` (timestamptz)\n"
             . "   - `end_at` (timestamptz)\n"
             . "   - `is_active` (bool)\n"
-            . "   - `deleted_at` (timestamptz)\n\n"
-            . "QUY TẮC BẮT BUỘC KHI VIẾT SQL (BẢO MẬT & ĐỘ CHÍNH XÁC):\n"
-            . "1. BẢO MẬT USER: Người dùng hiện tại có ID là: '{$userId}'. Bạn BẮT BUỘC phải lọc theo điều kiện `user_id = '{$userId}'` cho TẤT CẢ các bảng để tránh lộ dữ liệu (ví dụ: `wallets.user_id = '{$userId}'`, `transactions.user_id = '{$userId}'`, `budgets.user_id = '{$userId}'`, `recurring_rules.user_id = '{$userId}'`). Đối với các bảng liên kết như `wallet_balances` và `budget_usages`, bạn phải join với bảng cha để lọc theo `user_id`. LƯU Ý RIÊNG CHO BẢNG `categories`: Bảng này chứa cả danh mục hệ thống (có `user_id IS NULL`) và danh mục riêng của user, nên bạn PHẢI dùng điều kiện: `(categories.user_id = '{$userId}' OR categories.user_id IS NULL)`.\n"
-            . "2. SOFT DELETE: Chỉ lấy dữ liệu chưa xóa. Luôn thêm điều kiện `deleted_at IS NULL` cho các bảng `transactions`, `wallets`, `categories`, `recurring_rules`.\n"
+            . "   - `deleted_at` (timestamptz)\n"
+            . "9. Bảng `savings_goals` (Mục tiêu tiết kiệm):\n"
+            . "   - `id` (uuid, khóa chính)\n"
+            . "   - `user_id` (uuid, khóa ngoại)\n"
+            . "   - `name` (varchar, tên mục tiêu tiết kiệm như 'Đi du lịch', 'Mua xe')\n"
+            . "   - `target_amount` (decimal, số tiền mục tiêu cần tích lũy)\n"
+            . "   - `current_amount` (decimal, số tiền đã tích lũy hiện tại)\n"
+            . "   - `target_date` (date, ngày dự kiến hoàn thành)\n"
+            . "   - `status` (string, trạng thái: 'active', 'completed', 'cancelled')\n"
+            . "   - `auto_save_frequency` (string, tần suất tự động tích lũy: 'daily', 'weekly', 'monthly', hoặc null)\n"
+            . "   - `auto_save_amount` (decimal, số tiền tự động tích lũy mỗi kỳ)\n"
+            . "   - `source_wallet_id` (uuid, ví nguồn để tự động trích tiền)\n"
+            . "10. Bảng `savings_transactions` (Giao dịch tích lũy hoặc rút tiền từ mục tiêu tiết kiệm):\n"
+            . "   - `id` (uuid, khóa chính)\n"
+            . "   - `savings_goal_id` (uuid, khóa ngoại liên kết savings_goals.id)\n"
+            . "   - `type` (enum: 'deposit', 'withdraw')\n"
+            . "   - `amount` (decimal, số tiền giao dịch)\n"
+            . "   - `source_wallet_id` (uuid, ví nguồn/đích liên quan)\n"
+            . "   - `transaction_date` (timestamptz)\n\n"
+             . "QUY TẮC BẮT BUỘC KHI VIẾT SQL (BẢO MẬT & ĐỘ CHÍNH XÁC):\n"
+             . "1. BẢO MẬT USER: Người dùng hiện tại có ID là: '{$userId}'. Bạn BẮT BUỘC phải lọc theo điều kiện `user_id = '{$userId}'` cho TẤT CẢ các bảng để tránh lộ dữ liệu (ví dụ: `wallets.user_id = '{$userId}'`, `transactions.user_id = '{$userId}'`, `budgets.user_id = '{$userId}'`, `recurring_rules.user_id = '{$userId}'`, `savings_goals.user_id = '{$userId}'`). Đối với các bảng liên kết như `wallet_balances`, `budget_usages` và `savings_transactions`, bạn phải join với bảng cha tương ứng để lọc theo `user_id`. LƯU Ý RIÊNG CHO BẢNG `categories`: Bảng này chứa cả danh mục hệ thống (có `user_id IS NULL`) và danh mục riêng của user, nên bạn PHẢI dùng điều kiện: `(categories.user_id = '{$userId}' OR categories.user_id IS NULL)`.\n"
+             . "2. SOFT DELETE: Chỉ lấy dữ liệu chưa xóa. Luôn thêm điều kiện `deleted_at IS NULL` cho các bảng `transactions`, `wallets`, `categories`, `recurring_rules`.\n"
             . "3. QUY ĐỔI TIỀN TỆ: Khi tính tổng số tiền (SUM, AVG) thu nhập/chi tiêu, bạn PHẢI dùng cột `amount_in_user_currency` của bảng `transactions` thay vì cột `amount`.\n"
             . "4. LOẠI BỎ CHUYỂN KHOẢN NỘI BỘ: Khi tính tổng thu nhập hoặc chi tiêu, bạn PHẢI loại trừ các giao dịch luân chuyển nội bộ (chuyển tiền giữa các ví của chính mình). Hãy thêm điều kiện lọc sau vào câu lệnh SQL của bạn:\n"
             . "   `AND (transactions.source_type != 'transfer' OR transactions.source_type IS NULL OR transactions.source_id NOT IN (SELECT wt.id FROM wallet_transfers wt JOIN wallets fw ON wt.from_wallet_id = fw.id JOIN wallets tw ON wt.to_wallet_id = tw.id WHERE fw.user_id = tw.user_id))`\n"
@@ -364,7 +382,6 @@ class AiChatController extends Controller
 
                 $finalPayload = [
                     'contents' => $finalContents,
-                    'tools' => $tools,
                     'system_instruction' => [
                         'parts' => [
                             ['text' => $systemInstruction]
