@@ -501,4 +501,89 @@ class QrTransferTest extends TestCase
             'title' => 'Thanh toán cho HIGHLANDS COFFEE'
         ]);
     }
+
+    public function test_recipient_can_update_received_transfer_category()
+    {
+        // 1. Create recipient user & wallet (bank type)
+        $recipientAuth = $this->authenticateUser('recipient_update_cat@example.com', 'Recipient Update Cat', 'USR111222');
+        $recipientId = $recipientAuth['user_id'];
+        $recipientToken = $recipientAuth['token'];
+
+        $recipientWalletId = (string) Str::uuid7();
+        DB::table('wallets')->insert([
+            'id' => $recipientWalletId,
+            'user_id' => $recipientId,
+            'name' => 'Ví Ngân Hàng Recipient Update Cat',
+            'type' => 'bank',
+            'currency_code' => 'VND',
+            'is_hidden' => false,
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        DB::table('wallet_balances')->insert([
+            'wallet_id' => $recipientWalletId,
+            'available_balance' => 0.00,
+            'version' => 1,
+            'updated_at' => now()
+        ]);
+
+        // 2. Perform P2P transfer from sender (authenticated in setUp) to recipient
+        $transferResponse = $this->postJson('/api/qr/transfer', [
+            'from_wallet_id' => $this->walletId,
+            'payee_type' => 'internal',
+            'payee_user_id' => $recipientId,
+            'amount' => 50000.00,
+            'notes' => 'P2P transfer for category update test'
+        ], [
+            'Authorization' => 'Bearer ' . $this->token
+        ]);
+
+        $transferResponse->assertStatus(200);
+
+        // 3. Find the recipient's incoming transaction
+        $recipientTx = DB::table('transactions')
+            ->where('user_id', $recipientId)
+            ->where('wallet_id', $recipientWalletId)
+            ->where('type', 'income')
+            ->first();
+
+        $this->assertNotNull($recipientTx);
+
+        // 4. Create an income category for the recipient
+        $incomeCategoryId = (string) Str::uuid7();
+        DB::table('categories')->insert([
+            'id' => $incomeCategoryId,
+            'user_id' => $recipientId,
+            'parent_id' => null,
+            'type' => 'income',
+            'name' => 'Lương',
+            'is_default' => false,
+            'sort_order' => 1,
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        // 5. Update transaction's category as the recipient
+        $updateResponse = $this->postJson("/api/transactions/{$recipientTx->id}", [
+            'category_id' => $incomeCategoryId,
+            'title' => 'Cập nhật danh mục Lương'
+        ], [
+            'Authorization' => 'Bearer ' . $recipientToken
+        ]);
+
+        if ($updateResponse->status() !== 200) {
+            dump($updateResponse->json());
+        }
+
+        $updateResponse->assertStatus(200);
+
+        // 6. Verify that the category_id is updated in the DB
+        $this->assertDatabaseHas('transactions', [
+            'id' => $recipientTx->id,
+            'user_id' => $recipientId,
+            'category_id' => $incomeCategoryId,
+            'title' => 'Cập nhật danh mục Lương'
+        ]);
+    }
 }
