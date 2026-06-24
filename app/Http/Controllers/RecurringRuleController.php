@@ -72,7 +72,7 @@ class RecurringRuleController extends Controller
             }
 
             if ($wallet->type === 'cash') {
-                $validated['payee_id'] = null;
+                return response()->json(['status' => 'error', 'message' => __('messages.recurring_wallet_no_cash')], 400);
             }
 
             if ($wallet->currency_code !== 'VND') {
@@ -138,7 +138,7 @@ class RecurringRuleController extends Controller
             }
 
             if ($wallet->type === 'cash') {
-                $validated['payee_id'] = null;
+                return response()->json(['status' => 'error', 'message' => __('messages.recurring_wallet_no_cash')], 400);
             }
 
             if ($wallet->currency_code !== 'VND') {

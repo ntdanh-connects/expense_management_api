@@ -52,8 +52,6 @@ class UserService
                 'financial_start_day' => 1,
                 'created_at'          => now()
             ]);
-
-            $this->createDefaultCashWallet($uuid);
             
             $user->notify(new VerifyEmailNotification($user));
 
@@ -244,8 +242,6 @@ class UserService
                 'financial_start_day' => 1,
                 'created_at'          => now()
             ]);
-
-            $this->createDefaultCashWallet($uuid);
 
             return $this->generateUserSession($user, $deviceData);
         });
@@ -716,30 +712,5 @@ class UserService
             ->update([
                 'revoked_at' => now()
             ]);
-    }
-
-    private function createDefaultCashWallet(string $userId): void
-    {
-        $walletId = (string) Str::uuid7();
-        DB::table('wallets')->insert([
-            'id'            => $walletId,
-            'user_id'       => $userId,
-            'name'          => 'Tiền mặt',
-            'type'          => 'cash',
-            'currency_code' => 'VND',
-            'icon'          => 'cash',
-            'color'         => '#4C4DDC',
-            'is_hidden'     => false,
-            'is_default_receiving' => false,
-            'created_at'    => now(),
-            'updated_at'    => now(),
-        ]);
-
-        DB::table('wallet_balances')->insert([
-            'wallet_id'         => $walletId,
-            'available_balance' => 0.00,
-            'created_at'        => now(),
-            'updated_at'        => now(),
-        ]);
     }
 }
