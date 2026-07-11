@@ -249,8 +249,8 @@ class VietinBankService
         }
  
         // Local Fallback: return a dummy image and generate a raw EMVCo string
-        $dummyQrCode = "00020101021138" . str_pad(strlen($bankBin) + strlen($accountNumber) + 20, 2, '0', STR_PAD_LEFT)
-            . "0010A00000072701" . str_pad(strlen($bankBin) + strlen($accountNumber) + 4, 2, '0', STR_PAD_LEFT)
+        $dummyQrCode = "00020101021138" . str_pad(strlen($bankBin) + strlen($accountNumber) + 26, 2, '0', STR_PAD_LEFT)
+            . "0010A00000072701" . str_pad(strlen($bankBin) + strlen($accountNumber) + 8, 2, '0', STR_PAD_LEFT)
             . "00" . str_pad(strlen($bankBin), 2, '0', STR_PAD_LEFT) . $bankBin
             . "01" . str_pad(strlen($accountNumber), 2, '0', STR_PAD_LEFT) . $accountNumber
             . "0208QRIBFTTA5204601153037045802VN59" . str_pad(strlen($accountName), 2, '0', STR_PAD_LEFT) . strtoupper($accountName)

@@ -9,6 +9,8 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use App\Models\Transaction;
 use App\Events\TransactionSaved;
+use Illuminate\Support\Facades\Http;
+use App\Models\User;
 
 class WalletService {
     protected $walletRepository;
@@ -27,7 +29,7 @@ class WalletService {
         return $this->walletRepository->getWalletsByUserId($userId);
     }
 
-    // 🔥 Kích hoạt tạo ví đồng bộ 2 bảng sạch sẽ theo SQL
+    // Kích hoạt tạo ví đồng bộ 2 bảng sạch sẽ theo SQL
     public function createNewWallet(string $userId, array $data)
     {
         return DB::transaction(function () use ($userId, $data) {
@@ -461,7 +463,7 @@ class WalletService {
 
             // Gửi thông báo nhận tiền P2P cho người thụ hưởng
             try {
-                $recipient = \App\Models\User::find($toUserId);
+                $recipient = User::find($toUserId);
                 if ($recipient) {
                     $recipient->notify(new \App\Notifications\P2pTransferReceivedNotification(
                         $senderName,
@@ -645,7 +647,7 @@ class WalletService {
                 ]
             ];
 
-            $response = \Illuminate\Support\Facades\Http::timeout(5)->post($url, $payload);
+            $response = Http::timeout(5)->post($url, $payload);
 
             if ($response->failed()) {
                 return null;

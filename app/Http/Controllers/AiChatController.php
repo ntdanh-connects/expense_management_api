@@ -59,7 +59,7 @@ class AiChatController extends Controller
                 ->where('id', $conversationId)
                 ->update(['updated_at' => now()]);
         } else {
-            $conversationId = (string) Str::uuid();
+            $conversationId = (string) Str::uuid7();
             $title = Str::limit($prompt, 40, '...');
             DB::table('ai_conversations')->insert([
                 'id' => $conversationId,
@@ -70,9 +70,11 @@ class AiChatController extends Controller
             ]);
         }
 
-        // 1. Lấy thông tin tài chính nền của người dùng (Proactive Context)
-        $currentMonth = now()->month;
-        $currentYear = now()->year;
+        // 1. Xác định timezone của người dùng và Lấy thông tin tài chính nền (Proactive Context)
+        $userTimezone = DB::table('user_preferences')->where('user_id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
+        $userNow = now($userTimezone);
+        $currentMonth = $userNow->month;
+        $currentYear = $userNow->year;
         
         $budgetSummary = DB::table('budgets')
             ->join('budget_usages', 'budgets.id', '=', 'budget_usages.budget_id')
@@ -120,6 +122,14 @@ class AiChatController extends Controller
         // 2. Database Schema và System Instructions
         $systemInstruction = "Bạn là chuyên gia phân tích dữ liệu tài chính SQL. "
             . "Nhiệm vụ của bạn là nhận câu hỏi tự nhiên của người dùng và chuyển thành câu lệnh SQL PostgreSQL phù hợp.\n\n"
+            . "YÊU CẦU THỜI GIAN & MÚI GIỜ (CỰC KỲ QUAN TRỌNG):\n"
+            . "- Múi giờ hiện tại của người dùng là: '{$userTimezone}'.\n"
+            . "- Thời gian hiện tại của người dùng là: '{$userNow->toDateTimeString()}'.\n"
+            . "- Ngày hôm nay của người dùng: '{$userNow->toDateString()}'.\n"
+            . "- Cột `transaction_date` trong bảng `transactions` được lưu ở múi giờ UTC.\n"
+            . "- Khi tạo câu lệnh SQL truy vấn thời gian (như hôm nay, hôm qua, tuần này, tháng này, năm nay), bạn BẮT BUỘC phải quy đổi múi giờ của cột `transaction_date` từ UTC sang múi giờ của người dùng trước khi so sánh.\n"
+            . "- Ví dụ lọc ngày hôm nay: `WHERE (transaction_date AT TIME ZONE 'UTC' AT TIME ZONE '{$userTimezone}')::date = '{$userNow->toDateString()}'`.\n"
+            . "- Ví dụ lọc tháng này: `WHERE DATE_TRUNC('month', transaction_date AT TIME ZONE 'UTC' AT TIME ZONE '{$userTimezone}') = DATE_TRUNC('month', '{$userNow->toDateString()}'::date)`.\n\n"
             . "Dưới đây là cấu trúc cơ sở dữ liệu (Database Schema):\n"
             . "1. Bảng `wallets` (Ví chứa tiền):\n"
             . "   - `id` (uuid, khóa chính)\n"
@@ -301,7 +311,7 @@ class AiChatController extends Controller
         ];
 
         DB::table('ai_chat_messages')->insert([
-            'id' => (string) Str::uuid(),
+            'id' => (string) Str::uuid7(),
             'user_id' => $userId,
             'conversation_id' => $conversationId,
             'role' => 'user',
@@ -366,7 +376,7 @@ class AiChatController extends Controller
 
                 // Lưu model functionCall vào DB
                 DB::table('ai_chat_messages')->insert([
-                    'id' => (string) Str::uuid(),
+                    'id' => (string) Str::uuid7(),
                     'user_id' => $userId,
                     'conversation_id' => $conversationId,
                     'role' => 'model',
@@ -385,7 +395,7 @@ class AiChatController extends Controller
 
                 // Lưu functionResponse vào DB
                 DB::table('ai_chat_messages')->insert([
-                    'id' => (string) Str::uuid(),
+                    'id' => (string) Str::uuid7(),
                     'user_id' => $userId,
                     'conversation_id' => $conversationId,
                     'role' => 'function',

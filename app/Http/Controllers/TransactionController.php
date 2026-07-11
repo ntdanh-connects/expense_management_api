@@ -100,7 +100,7 @@ class TransactionController extends Controller
 
             $sourceType = $validated['source_type'] ?? 'manual';
             $txType = $validated['type'];
-            if ($txType === 'expense' && in_array($sourceType, ['manual', 'transfer']) && $wallet->type !== 'cash') {
+            if ($txType === 'expense' && $sourceType === 'manual' && $wallet->type !== 'cash') {
                 if (empty($validated['payee_id'])) {
                     return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công qua ví ngân hàng hoặc ví điện tử bắt buộc phải có người hưởng thụ.'], 400);
                 }
@@ -200,7 +200,7 @@ class TransactionController extends Controller
 
             $sourceType = $validated['source_type'] ?? $existingTx->source_type ?? 'manual';
             $txType = $validated['type'] ?? $existingTx->type;
-            if ($txType === 'expense' && in_array($sourceType, ['manual', 'transfer']) && $wallet->type !== 'cash') {
+            if ($txType === 'expense' && $sourceType === 'manual' && $wallet->type !== 'cash') {
                 $payeeId = $validated['payee_id'] ?? $existingTx->payee_id;
                 if (empty($payeeId)) {
                     return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công qua ví ngân hàng hoặc ví điện tử bắt buộc phải có người hưởng thụ.'], 400);

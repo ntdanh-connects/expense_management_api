@@ -6,6 +6,7 @@ use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Events\NewNotification;
+use Illuminate\Support\Facades\Log;
 
 class CustomDbChannel
 {
@@ -18,9 +19,15 @@ class CustomDbChannel
      */
     public function send($notifiable, Notification $notification): void
     {
-        $data = method_exists($notification, 'toDatabase')
-            ? $notification->toDatabase($notifiable)
-            : $notification->toArray($notifiable);
+        if (method_exists($notification, 'toDatabase')) {
+            $data = $notification->toDatabase($notifiable);
+        } elseif (method_exists($notification, 'toArray')) {
+            $data = $notification->toArray($notifiable);
+        } else {
+            $data = [];
+        }
+
+        $data = is_array($data) ? $data : [];
 
         $title = $data['title'] ?? null;
         $content = $data['message'] ?? $data['content'] ?? null;
@@ -56,7 +63,7 @@ class CustomDbChannel
                 'created_at' => $now->toISOString(),
             ]));
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning("Lỗi phát sóng realtime qua Pusher: " . $e->getMessage());
+            Log::warning("Lỗi phát sóng realtime qua Pusher: " . $e->getMessage());
         }
     }
 }
