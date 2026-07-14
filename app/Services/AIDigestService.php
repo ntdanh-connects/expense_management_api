@@ -32,7 +32,7 @@ class AIDigestService
                 $cashflowData = $this->analytisService->getCashflowHistory($userId, $periodStart, $today, $timezone);
 
                 $apiKey = env("GEMINI_API_KEY");
-                $model = env('GEMINI_API_MODEL', 'gemini-1.5-flash');
+                $model = env('GEMINI_API_MODEL', 'gemini-3.5-flash');
                 $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}";
 
                 $systemInstruction = "Bạn là chuyên gia phân tích tài chính cá nhân. Nhiệm vụ của bạn là nhận dữ liệu dòng tiền hằng ngày của người dùng và trả về tóm tắt dưới dạng JSON"
