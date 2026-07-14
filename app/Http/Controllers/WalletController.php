@@ -142,20 +142,6 @@ class WalletController extends Controller {
             // Strip HTML tags
             $validated['notes'] = strip_tags($validated['notes']);
 
-            //rút tiền mặt yêu cầu tối thiểu 50,000đ
-            $fromWallet = DB::table('wallets')->where('id', $validated['from_wallet_id'])->first();
-            $toWallet = DB::table('wallets')->where('id', $validated['to_wallet_id'])->first();
-            if ($fromWallet && $toWallet) {
-                if ($fromWallet->type === 'bank' && $toWallet->type === 'cash') {
-                    if ($validated['amount'] < 50000) {
-                        return response()->json([
-                            'status' => 'error',
-                            'message' => 'Rút tiền mặt từ ngân hàng yêu cầu số tiền tối thiểu là 50,000 VND.'
-                        ], 422);
-                    }
-                }
-            }
-
             $result = $this->walletService->transferMoney($userId, $validated);
 
             return response()->json([
