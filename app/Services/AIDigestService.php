@@ -63,7 +63,7 @@ class AIDigestService
                     ]
                 ];
 
-                $reponse = Http::post($url, $payload);
+                $reponse = Http::timeout(15)->post($url, $payload);
 
                 if ($reponse->successful()) {
                     $result = $reponse->json();
