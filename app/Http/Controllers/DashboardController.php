@@ -186,10 +186,10 @@ class DashboardController extends Controller
             'status' => 'success',
             'message' => 'Lấy dữ liệu AI Digest thành công!',
             'data' => [
-                'period_start' => $periodStartStr,
-                'period_end' => $endDate->setTimezone($timezone)->toDateString(),
+                'summary' => $aiDigest['summary'] ?? 'Không có tóm tắt.',
+                'insight' => $aiDigest['insight'] ?? null,
+                'suggested_questions' => $aiDigest['suggested_questions'] ?? [],
                 'cashflow_chart' => $chartData,
-                'ai_digest' => $aiDigest
             ]
         ]);
     }
