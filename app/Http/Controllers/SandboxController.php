@@ -30,7 +30,7 @@ class SandboxController extends Controller
 
             $validated = $request->validate([
                 'wallet_id'   => 'required|uuid',
-                'amount'      => 'required|numeric|min:0.01',
+                'amount'      => 'required|numeric|min:1000',
                 'sender_name' => 'nullable|string|max:255',
                 'notes'       => 'nullable|string|max:1000',
             ]);

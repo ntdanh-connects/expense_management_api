@@ -80,8 +80,8 @@ class TransactionController extends Controller
                 'category_id'      => 'nullable|uuid',
                 'payee_id'         => 'nullable|uuid|exists:saved_payees,id',
                 'type'             => 'required|string|in:income,expense',
-                'amount'           => 'required|numeric|min:0.01',
-                'title'            => 'nullable|string|max:255',
+                'amount'           => 'required|numeric|min:1000',
+                'title'            => 'required|string|max:255',
                 'notes'            => 'nullable|string|max:1000',
                 'transaction_date' => 'nullable|date',
                 'currency_code'    => 'nullable|string|in:VND',
@@ -92,6 +92,10 @@ class TransactionController extends Controller
                 'attachments.*'    => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400',
                 'source_type'      => 'nullable|string|in:manual,recurring,transfer,adjustment,import'
             ]);
+
+            // Strip HTML tags & set default notes if empty
+            $validated['title'] = strip_tags($validated['title']);
+            $validated['notes'] = empty($validated['notes']) ? 'Không có nội dung' : strip_tags($validated['notes']);
 
             $wallet = DB::table('wallets')->where('id', $validated['wallet_id'])->where('user_id', $userId)->first();
             if (!$wallet) {
@@ -174,7 +178,7 @@ class TransactionController extends Controller
                 'category_id'      => 'nullable|uuid',
                 'payee_id'         => 'nullable|uuid|exists:saved_payees,id',
                 'type'             => 'sometimes|required|string|in:income,expense',
-                'amount'           => 'sometimes|required|numeric|min:0.01',
+                'amount'           => 'sometimes|required|numeric|min:1000',
                 'title'            => 'sometimes|required|string|max:255',
                 'notes'            => 'nullable|string|max:1000',
                 'transaction_date' => 'sometimes|required|date',
@@ -186,6 +190,13 @@ class TransactionController extends Controller
                 'attachments.*'    => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400',
                 'source_type'      => 'nullable|string|in:manual,recurring,transfer,adjustment,import'
             ]);
+
+            if (isset($validated['title'])) {
+                $validated['title'] = strip_tags($validated['title']);
+            }
+            if (array_key_exists('notes', $validated)) {
+                $validated['notes'] = empty($validated['notes']) ? 'Không có nội dung' : strip_tags($validated['notes']);
+            }
 
             $existingTx = DB::table('transactions')->where('id', $id)->where('user_id', $userId)->first();
             if (!$existingTx) {

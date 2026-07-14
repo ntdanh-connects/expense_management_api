@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\WalletService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class WalletController extends Controller {
     protected $walletService;
@@ -133,10 +134,27 @@ class WalletController extends Controller {
             $validated = $request->validate([
                 'from_wallet_id' => 'required|uuid',
                 'to_wallet_id'   => 'required|uuid',
-                'amount'         => 'required|numeric|min:0.01',
-                'notes'          => 'nullable|string|max:500',
+                'amount'         => 'required|numeric|min:1000',
+                'notes'          => 'required|string|max:500',
                 'timezone'       => 'nullable|string|timezone'
             ]);
+
+            // Strip HTML tags
+            $validated['notes'] = strip_tags($validated['notes']);
+
+            //rút tiền mặt yêu cầu tối thiểu 50,000đ
+            $fromWallet = DB::table('wallets')->where('id', $validated['from_wallet_id'])->first();
+            $toWallet = DB::table('wallets')->where('id', $validated['to_wallet_id'])->first();
+            if ($fromWallet && $toWallet) {
+                if ($fromWallet->type === 'bank' && $toWallet->type === 'cash') {
+                    if ($validated['amount'] < 50000) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'Rút tiền mặt từ ngân hàng yêu cầu số tiền tối thiểu là 50,000 VND.'
+                        ], 422);
+                    }
+                }
+            }
 
             $result = $this->walletService->transferMoney($userId, $validated);
 

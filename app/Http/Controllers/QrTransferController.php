@@ -305,7 +305,7 @@ class QrTransferController extends Controller
         $validated = $request->validate([
             'from_wallet_id' => 'required|uuid',
             'payee_type' => 'required|string|in:internal,external',
-            'amount' => 'required|numeric|min:0.01',
+            'amount' => 'required|numeric|min:1000',
             'notes' => 'nullable|string|max:500',
             'timezone' => 'nullable|string|timezone',
             'is_qr' => 'nullable|boolean',

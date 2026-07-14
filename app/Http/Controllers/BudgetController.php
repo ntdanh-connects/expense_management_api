@@ -62,7 +62,7 @@ class BudgetController extends Controller
 
             $validated = $request->validate([
                 'category_id' => 'nullable|uuid',
-                'limit_amount' => 'required|numeric|min:0.01',
+                'limit_amount' => 'required|numeric|min:1000',
                 'month' => 'required|integer|between:1,12',
                 'year' => 'required|integer|min:2000'
             ]);
