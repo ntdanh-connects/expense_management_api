@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\FinancialHelper;
+use App\Services\AIDigestService;
 use App\Services\WalletService;
 use App\Services\BudgetService;
+use App\Services\FinancialAnalysisService;
 use App\Services\TransactionService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -162,5 +165,31 @@ class DashboardController extends Controller
         } catch (\Throwable $e) {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
+    }
+
+    public function getCashflowDigest(Request $request, FinancialAnalysisService $analytisService, AIDigestService $aiDigestService){
+        $userId = $request->attributes->get('user_id') ?? $request->user()->user_id;
+
+        $preference = DB::table('user_preferences')->where('user_id',$userId)->first();
+        $timezone = $preference->timezone ?? 'Asia/Ho_Chi_Minh';
+
+        [$startDate,$endDate] = FinancialHelper::getFinancialRangeForDate($userId,Carbon::now());
+
+        $periodStartStr = $startDate->setTimezone($timezone)->toDateString();
+        $todayStr = Carbon::now($timezone)->toDateString();
+
+        $chartData = $analytisService->getCashflowHistory($userId,$periodStartStr,$todayStr,$timezone);
+
+        $aiDigest = $aiDigestService->getOrGenerateDigest($userId,$periodStartStr,$todayStr,$timezone);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'period_start' => $periodStartStr,
+                'period_end' => $endDate->setTimezone($timezone)->toDateString(),
+                'cashflow_chart'=> $chartData,
+                'ai_digest' => $aiDigest
+            ]
+        ]);
     }
 }

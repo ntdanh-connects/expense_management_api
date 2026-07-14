@@ -75,7 +75,7 @@ class AiChatController extends Controller
         $userNow = now($userTimezone);
         $currentMonth = $userNow->month;
         $currentYear = $userNow->year;
-        
+
         $budgetSummary = DB::table('budgets')
             ->join('budget_usages', 'budgets.id', '=', 'budget_usages.budget_id')
             ->join('categories', 'budgets.category_id', '=', 'categories.id')
@@ -231,7 +231,12 @@ class AiChatController extends Controller
             . "  ]\n"
             . "}\n"
             . "Lưu ý: suggested_questions phải chứa chính xác 3 câu hỏi gợi ý tiếp theo có ích nhất cho người dùng.\n\n"
-            . "- Sử dụng công cụ `execute_sql_query` để thực thi câu lệnh SQL PostgreSQL hợp lệ."
+            . "- Sử dụng công cụ `execute_sql_query` để thực thi câu lệnh SQL PostgreSQL hợp lệ.\n"
+            . "- TuYỆT ĐỐI KHÔNG áp dụng máy móc các framework cố định như 50/30/20, Kakeibo, Pay Yourself First hay bất kỳ quy tắc phân bố % có sẵn\n"
+            ."- Mỗi lần tư vấn ngân sach phải dựa vào BỐI CẢNH CỤ THỂ: tháng đang hỏi, mùa trong năm, các sự kiện đặc biệt (lễ, Tết, hè, kỳ nghỉ, sinh nhật, đám cưới, xây nhà, v.v), thói quen chi tiêu thực tế của user từ lịch sử giao dịch.\n"
+            ."- Đề xuất con số CHI TIẾT và THỰC TẾ (ví dụ: ăn uống 2.3tr, mua sắm đồ gia dụng 3.4tr, v.v), không phải con số thu nhập theo % hay theo quy tắc\n"
+            ."- Nếu không có dữ liệu lịch sử, hãy hỏi lại hoặc đưa ra 2-3 phương án khác nhau về phong cách sống ( ví dụ: tiết kiệm, cân bằng, thoải mái).\n"
+            ."- Có thể hỏi ngược lại user để cá nhân hóa tốt hơn khi đưa ra con số cụ thể\n"
             . $proactiveContext;
 
         // 3. Định nghĩa Tool
@@ -322,7 +327,7 @@ class AiChatController extends Controller
 
         // 5. Gọi Gemini API (lượt 1)
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}";
-        
+
         $payload = [
             'contents' => $contents,
             'tools' => $tools,
@@ -333,12 +338,13 @@ class AiChatController extends Controller
             ],
             'generationConfig' => [
                 'responseMimeType' => 'application/json',
+                'temperature' => 1.5
             ]
         ];
 
         try {
             $response = Http::timeout(15)->post($url, $payload);
-            
+
             if ($response->failed()) {
                 return response()->json([
                     'error' => 'Lỗi gọi API Gemini lượt 1',
@@ -434,6 +440,7 @@ class AiChatController extends Controller
                     ],
                     'generationConfig' => [
                         'responseMimeType' => 'application/json',
+                        'temperature' => 1.5
                     ]
                 ];
 
@@ -479,7 +486,6 @@ class AiChatController extends Controller
                     'insight' => $insight,
                     'suggested_questions' => $suggestedQuestions
                 ]);
-
             } else {
                 // Nếu AI phản hồi trực tiếp không qua tool
                 $rawText = $part['text'] ?? '{"answer": "Không có câu trả lời."}';
@@ -512,7 +518,6 @@ class AiChatController extends Controller
                     'suggested_questions' => $suggestedQuestions
                 ]);
             }
-
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Lỗi xử lý server',
@@ -670,9 +675,20 @@ class AiChatController extends Controller
         }
 
         $forbiddenKeywords = [
-            'insert', 'update', 'delete', 'drop', 'truncate', 'alter',
-            'create', 'grant', 'revoke', 'replace', 'vacuum', 'analyze',
-            'into', 'union'
+            'insert',
+            'update',
+            'delete',
+            'drop',
+            'truncate',
+            'alter',
+            'create',
+            'grant',
+            'revoke',
+            'replace',
+            'vacuum',
+            'analyze',
+            'into',
+            'union'
         ];
 
         foreach ($forbiddenKeywords as $keyword) {

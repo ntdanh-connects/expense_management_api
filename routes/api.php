@@ -38,6 +38,7 @@ Route::middleware(['custom.auth'])->group(function () {
     Route::get('/ai-conversations/{id}/messages', [\App\Http\Controllers\AiChatController::class, 'listMessages']);
     Route::put('/ai-conversations/{id}', [\App\Http\Controllers\AiChatController::class, 'updateConversation']);
     Route::delete('/ai-conversations/{id}', [\App\Http\Controllers\AiChatController::class, 'deleteConversation']);
+    Route::post('/ai-digest', [DashboardController::class,'getCashflowDigest']);
 
     // API Aggregation cho màn hình Dashboard chính
     Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
