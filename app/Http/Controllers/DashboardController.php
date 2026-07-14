@@ -52,8 +52,8 @@ class DashboardController extends Controller
             // 2. Lấy danh sách ví và số dư (Không cache hoặc cache rất ngắn để hiển thị cấu hình ví/số dư thay đổi tức thời)
             $wallets = $this->walletService->getAllUserWallets($userId);
             // Đảm bảo wallets luôn là mảng phẳng khi trả về
-            $walletsArray = $wallets instanceof \Illuminate\Support\Collection 
-                ? $wallets->values()->toArray() 
+            $walletsArray = $wallets instanceof \Illuminate\Support\Collection
+                ? $wallets->values()->toArray()
                 : (is_array($wallets) ? array_values($wallets) : []);
             // Lọc phòng vệ loại bỏ ví thiếu id
             $walletsArray = array_values(array_filter($walletsArray, function ($w) {
@@ -68,8 +68,8 @@ class DashboardController extends Controller
                 return $budgets instanceof \Illuminate\Support\Collection ? $budgets->values()->toArray() : $budgets;
             });
             // Đảm bảo budgetsArray luôn là mảng phẳng khi trả về (an toàn trước cache cũ)
-            $budgetsArray = $budgetsData instanceof \Illuminate\Support\Collection 
-                ? $budgetsData->values()->toArray() 
+            $budgetsArray = $budgetsData instanceof \Illuminate\Support\Collection
+                ? $budgetsData->values()->toArray()
                 : (is_array($budgetsData) ? array_values($budgetsData) : []);
             // Lọc phòng vệ loại bỏ ngân sách thiếu id
             $budgetsArray = array_values(array_filter($budgetsArray, function ($b) {
@@ -85,8 +85,8 @@ class DashboardController extends Controller
                 return collect($items)->values()->toArray();
             });
             // Đảm bảo recentTransactionsArray luôn là mảng phẳng khi trả về
-            $recentTransactionsArray = $recentTransactionsData instanceof \Illuminate\Support\Collection 
-                ? $recentTransactionsData->values()->toArray() 
+            $recentTransactionsArray = $recentTransactionsData instanceof \Illuminate\Support\Collection
+                ? $recentTransactionsData->values()->toArray()
                 : (is_array($recentTransactionsData) ? array_values($recentTransactionsData) : []);
             // Lọc phòng vệ loại bỏ giao dịch thiếu id
             $recentTransactionsArray = array_values(array_filter($recentTransactionsArray, function ($t) {
@@ -109,27 +109,27 @@ class DashboardController extends Controller
                             $sub->where('transactions.source_type', '!=', 'transfer')
                                 ->orWhereNull('transactions.source_type');
                         })
-                        ->orWhere(function ($sub) {
-                            $sub->where('transactions.source_type', '=', 'transfer')
-                                ->where(function ($inner) {
-                                    $inner->whereNull('transactions.source_id')
-                                        ->orWhere(function ($orQuery) {
-                                            $orQuery->whereNotExists(function ($existsQuery) {
-                                                $existsQuery->select(DB::raw(1))
-                                                    ->from('wallet_transfers as wt')
-                                                    ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
-                                                    ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
-                                                    ->whereColumn('wt.id', 'transactions.source_id')
-                                                    ->whereColumn('fw.user_id', 'tw.user_id');
-                                            })
-                                            ->whereNotExists(function ($existsQuery) {
-                                                $existsQuery->select(DB::raw(1))
-                                                    ->from('savings_goals as sg')
-                                                    ->whereColumn('sg.id', 'transactions.source_id');
+                            ->orWhere(function ($sub) {
+                                $sub->where('transactions.source_type', '=', 'transfer')
+                                    ->where(function ($inner) {
+                                        $inner->whereNull('transactions.source_id')
+                                            ->orWhere(function ($orQuery) {
+                                                $orQuery->whereNotExists(function ($existsQuery) {
+                                                    $existsQuery->select(DB::raw(1))
+                                                        ->from('wallet_transfers as wt')
+                                                        ->join('wallets as fw', 'wt.from_wallet_id', '=', 'fw.id')
+                                                        ->join('wallets as tw', 'wt.to_wallet_id', '=', 'tw.id')
+                                                        ->whereColumn('wt.id', 'transactions.source_id')
+                                                        ->whereColumn('fw.user_id', 'tw.user_id');
+                                                })
+                                                    ->whereNotExists(function ($existsQuery) {
+                                                        $existsQuery->select(DB::raw(1))
+                                                            ->from('savings_goals as sg')
+                                                            ->whereColumn('sg.id', 'transactions.source_id');
+                                                    });
                                             });
-                                        });
-                                });
-                        });
+                                    });
+                            });
                     })
                     ->whereBetween('transaction_date', [$startDate, $endDate])
                     ->whereNull('deleted_at');
@@ -161,33 +161,34 @@ class DashboardController extends Controller
                     'summary'                     => $summary
                 ]
             ], 200);
-
         } catch (\Throwable $e) {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     }
 
-    public function getCashflowDigest(Request $request, FinancialAnalysisService $analytisService, AIDigestService $aiDigestService){
+    public function getCashflowDigest(Request $request, FinancialAnalysisService $analytisService, AIDigestService $aiDigestService)
+    {
         $userId = $request->attributes->get('user_id') ?? $request->user()->user_id;
 
-        $preference = DB::table('user_preferences')->where('user_id',$userId)->first();
+        $preference = DB::table('user_preferences')->where('user_id', $userId)->first();
         $timezone = $preference->timezone ?? 'Asia/Ho_Chi_Minh';
 
-        [$startDate,$endDate] = FinancialHelper::getFinancialRangeForDate($userId,Carbon::now());
+        [$startDate, $endDate] = FinancialHelper::getFinancialRangeForDate($userId, Carbon::now());
 
         $periodStartStr = $startDate->setTimezone($timezone)->toDateString();
         $todayStr = Carbon::now($timezone)->toDateString();
 
-        $chartData = $analytisService->getCashflowHistory($userId,$periodStartStr,$todayStr,$timezone);
+        $chartData = $analytisService->getCashflowHistory($userId, $periodStartStr, $todayStr, $timezone);
 
-        $aiDigest = $aiDigestService->getOrGenerateDigest($userId,$periodStartStr,$todayStr,$timezone);
+        $aiDigest = $aiDigestService->getOrGenerateDigest($userId, $periodStartStr, $todayStr, $timezone);
 
         return response()->json([
             'status' => 'success',
+            'message' => 'Lấy dữ liệu AI Digest thành công!',
             'data' => [
                 'period_start' => $periodStartStr,
                 'period_end' => $endDate->setTimezone($timezone)->toDateString(),
-                'cashflow_chart'=> $chartData,
+                'cashflow_chart' => $chartData,
                 'ai_digest' => $aiDigest
             ]
         ]);
