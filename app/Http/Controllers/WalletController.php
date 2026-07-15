@@ -135,7 +135,7 @@ class WalletController extends Controller {
                 'from_wallet_id' => 'required|uuid',
                 'to_wallet_id'   => 'required|uuid',
                 'amount'         => 'required|numeric|min:1000',
-                'notes'          => 'required|string|max:500',
+                'notes'          => 'nullable|string|max:500',
                 'timezone'       => 'nullable|string|timezone'
             ]);
 
