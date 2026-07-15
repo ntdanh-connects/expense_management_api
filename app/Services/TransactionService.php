@@ -36,7 +36,7 @@ class TransactionService
 
     public function getTransactionById(string $id, string $userId)
     {
-        $transaction = Transaction::with(['category', 'wallet', 'attachments', 'payee'])->find($id);
+        $transaction = Transaction::with(['category', 'wallet', 'attachments', 'payee', 'splits.wallet'])->find($id);
 
         if (!$transaction || $transaction->user_id !== $userId) {
             throw new \Exception(__('messages.transaction_not_found_or_unauthorized'));
@@ -60,6 +60,213 @@ class TransactionService
                 if ($existing) {
                     return $existing;
                 }
+            }
+
+            // MỚI: Xử lý giao dịch split (thanh toán kết hợp nhiều ví)
+            $isSplit = isset($data['splits']) && is_array($data['splits']) && count($data['splits']) > 1;
+
+            if ($isSplit) {
+                if (($data['type'] ?? 'expense') !== 'expense') {
+                    throw new \Exception("Chỉ cho phép thanh toán kết hợp nhiều ví đối với giao dịch chi tiêu (expense).");
+                }
+
+                $splitsData = $data['splits'];
+                
+                // 1. Kiểm tra lặp ví
+                $walletIdsInSplits = array_column($splitsData, 'wallet_id');
+                if (count($walletIdsInSplits) !== count(array_unique($walletIdsInSplits))) {
+                    throw new \Exception("Không được chọn trùng lặp ví trong cùng một giao dịch.");
+                }
+
+                // 2. Sắp xếp ví theo ID tăng dần để tránh Deadlock
+                usort($splitsData, function ($a, $b) {
+                    return strcmp($a['wallet_id'], $b['wallet_id']);
+                });
+
+                // 3. Quy đổi tiền tệ hiển thị của user
+                $userCurrency = DB::table('user_preferences')->where('user_id', $userId)->value('currency') ?? 'VND';
+                $totalSplitUserAmount = 0.0;
+                
+                $preparedSplits = [];
+                $walletBalancesToUpdate = [];
+
+                foreach ($splitsData as $splitItem) {
+                    $splitWalletId = $splitItem['wallet_id'];
+                    $splitAmount = (float) $splitItem['amount'];
+
+                    // Kiểm tra ví sở hữu
+                    $splitWallet = DB::table('wallets')
+                        ->where('id', $splitWalletId)
+                        ->where('user_id', $userId)
+                        ->whereNull('deleted_at')
+                        ->first();
+
+                    if (!$splitWallet) {
+                        throw new \Exception("Không tìm thấy ví hoặc bạn không có quyền sử dụng ví này.");
+                    }
+
+                    $splitWalletCurrency = $splitWallet->currency_code ?? 'VND';
+                    
+                    // Tính tỷ giá từ ví sang user currency
+                    $splitRate = $this->exchangeRateService->getRate($splitWalletCurrency, $userCurrency);
+                    $splitAmountInUserCurrency = (float) bcmul((string)$splitAmount, sprintf('%.6f', $splitRate), 4);
+                    
+                    $totalSplitUserAmount += $splitAmountInUserCurrency;
+
+                    // Khóa số dư ví
+                    $splitWalletBalance = DB::table('wallet_balances')
+                        ->where('wallet_id', $splitWalletId)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (!$splitWalletBalance) {
+                        throw new \Exception("Không tìm thấy số dư ví.");
+                    }
+
+                    // Kiểm tra số dư khả dụng
+                    if (bccomp($splitWalletBalance->available_balance, (string)$splitAmount, 2) === -1) {
+                        throw new \Exception("Số dư Ví '{$splitWallet->name}' không đủ để thực hiện giao dịch.");
+                    }
+
+                    $newSplitBalance = (float) bcsub($splitWalletBalance->available_balance, (string)$splitAmount, 2);
+
+                    $preparedSplits[] = [
+                        'wallet_id' => $splitWalletId,
+                        'amount' => $splitAmount,
+                        'amount_in_user_currency' => $splitAmountInUserCurrency,
+                        'exchange_rate' => $splitRate,
+                    ];
+
+                    $walletBalancesToUpdate[] = [
+                        'wallet_id' => $splitWalletId,
+                        'new_balance' => $newSplitBalance,
+                    ];
+                }
+
+                // 4. Validate tổng tiền giao dịch chính
+                $txCurrency = $data['currency_code'] ?? $userCurrency;
+                $amount = (float) $data['amount'];
+                if ($txCurrency === $userCurrency) {
+                    $amountInUserCurrency = $amount;
+                } else {
+                    $rateToUserCurrency = $this->exchangeRateService->getRate($txCurrency, $userCurrency);
+                    $amountInUserCurrency = (float) bcmul((string)$amount, sprintf('%.6f', $rateToUserCurrency), 4);
+                }
+
+                // Validate sai số tối đa 0.02
+                if (abs($totalSplitUserAmount - $amountInUserCurrency) > 0.02) {
+                    throw new \Exception("Tổng số tiền phân tách của các ví (" . number_format($totalSplitUserAmount, 2) . " " . $userCurrency . ") không khớp với số tiền giao dịch chính (" . number_format($amountInUserCurrency, 2) . " " . $userCurrency . "). Sai lệch tối đa cho phép là 0.02.");
+                }
+
+                // 5. Tạo giao dịch chính (wallet_id = null, is_split = true, amount = null)
+                $userTimezone = DB::table('user_preferences')->where('user_id', $userId)->value('timezone') ?? 'Asia/Ho_Chi_Minh';
+                $timezone = $data['timezone'] ?? $userTimezone;
+                $transactionId = $data['id'] ?? (string) Str::uuid7();
+
+                // Tự động phân loại danh mục bằng AI nếu category_id trống
+                $categoryId = $data['category_id'] ?? null;
+                if (empty($categoryId)) {
+                    $categoryId = $this->autoClassifyCategory($userId, $data['title'] ?? null, $data['notes'] ?? null, 'expense');
+                }
+
+                $txTitle = $data['title'] ?? null;
+                if (empty($txTitle)) {
+                    if ($categoryId) {
+                        $categoryName = DB::table('categories')->where('id', $categoryId)->value('name');
+                        $txTitle = $categoryName ?: 'Chi tiêu kết hợp';
+                    } else {
+                        $txTitle = 'Chi tiêu kết hợp';
+                    }
+                }
+
+                $transaction = Transaction::create([
+                    'id' => $transactionId,
+                    'user_id' => $userId,
+                    'wallet_id' => null,
+                    'category_id' => $categoryId,
+                    'payee_id' => $data['payee_id'] ?? null,
+                    'type' => 'expense',
+                    'status' => $data['status'] ?? 'completed',
+                    'amount' => null,
+                    'currency_code' => $txCurrency,
+                    'exchange_rate' => $data['exchange_rate'] ?? 1.0,
+                    'amount_in_user_currency' => $amountInUserCurrency,
+                    'title' => $txTitle,
+                    'notes' => $data['notes'] ?? null,
+                    'timezone' => $timezone,
+                    'transaction_date' => $data['transaction_date'] ?? now(),
+                    'source_type' => $data['source_type'] ?? 'manual',
+                    'source_id' => $data['source_id'] ?? null,
+                    'is_split' => true,
+                ]);
+
+                // 6. Lưu trữ các splits
+                foreach ($preparedSplits as $prepSplit) {
+                    DB::table('transaction_splits')->insert([
+                        'id' => (string) Str::uuid(),
+                        'transaction_id' => $transactionId,
+                        'wallet_id' => $prepSplit['wallet_id'],
+                        'amount' => $prepSplit['amount'],
+                        'amount_in_user_currency' => $prepSplit['amount_in_user_currency'],
+                        'exchange_rate' => $prepSplit['exchange_rate'],
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+
+                // 7. Cập nhật số dư các ví
+                foreach ($walletBalancesToUpdate as $wb) {
+                    DB::table('wallet_balances')->where('wallet_id', $wb['wallet_id'])->update([
+                        'available_balance' => $wb['new_balance'],
+                        'last_transaction_id' => $transactionId,
+                        'updated_at' => now()
+                    ]);
+                }
+
+                // 8. Xử lý đính kèm nếu có
+                $filesToUpload = [];
+                if ($attachment) {
+                    $filesToUpload[] = $attachment;
+                }
+                if ($attachments) {
+                    foreach ($attachments as $file) {
+                        if ($file instanceof UploadedFile) {
+                            $filesToUpload[] = $file;
+                        }
+                    }
+                }
+
+                $s3Key = config('filesystems.disks.s3.key');
+                $s3Secret = config('filesystems.disks.s3.secret');
+                $s3Bucket = config('filesystems.disks.s3.bucket');
+                $provider = (!empty($s3Key) && !empty($s3Secret) && !empty($s3Bucket)) ? 's3' : 'local';
+
+                foreach ($filesToUpload as $file) {
+                    $fileUrl = $this->imageUploadService->uploadToS3($file, 'receipts');
+                    TransactionAttachment::create([
+                        'id' => (string) Str::uuid7(),
+                        'transaction_id' => $transactionId,
+                        'storage_provider_enum' => $provider,
+                        'file_key' => $fileUrl,
+                        'file_url' => $fileUrl,
+                        'mime_type' => $file->getClientMimeType(),
+                        'file_size' => $file->getSize(),
+                        'uploaded_at' => now()
+                    ]);
+                }
+
+                // 9. Ghi log audit
+                TransactionAudit::create([
+                    'transaction_id' => $transactionId,
+                    'old_data' => null,
+                    'new_data' => $transaction->toArray(),
+                    'changed_by' => $userId
+                ]);
+
+                // Bắn sự kiện TransactionSaved
+                event(new \App\Events\TransactionSaved($transaction));
+
+                return $transaction->load('category', 'wallet', 'attachments', 'splits.wallet');
             }
 
             $walletId = $data['wallet_id'];
@@ -395,7 +602,8 @@ class TransactionService
     public function updateTransaction(string $id, string $userId, array $data, ?UploadedFile $attachment = null, ?array $attachments = null)
     {
         return DB::transaction(function () use ($id, $userId, $data, $attachment, $attachments) {
-            $transaction = Transaction::find($id);
+            // Lock bản ghi giao dịch chính để tránh race condition
+            $transaction = Transaction::where('id', $id)->lockForUpdate()->first();
 
             if (!$transaction || $transaction->user_id !== $userId) {
                 throw new \Exception(__('messages.transaction_not_found_or_unauthorized'));
@@ -420,81 +628,41 @@ class TransactionService
             }
 
             $oldData = $transaction->toArray();
+            $oldIsSplit = (bool) $transaction->is_split;
+            $newIsSplit = isset($data['splits']) && is_array($data['splits']) && count($data['splits']) > 1;
 
-            $oldWalletId = $transaction->wallet_id;
-            $newWalletId = $data['wallet_id'] ?? $oldWalletId;
-
-            $oldAmount = (float) $transaction->amount;
-            $newAmount = isset($data['amount']) ? (float) $data['amount'] : $oldAmount;
-
-            $oldType = $transaction->type;
-            $newType = $data['type'] ?? $oldType;
-
-            // Lấy currency của new wallet và old wallet
-            $oldWallet = DB::table('wallets')->where('id', $oldWalletId)->first();
-            $oldWalletCurrency = $oldWallet->currency_code ?? 'VND';
-
-            $newWallet = DB::table('wallets')->where('id', $newWalletId)->first();
-            $newWalletCurrency = $newWallet->currency_code ?? 'VND';
-
-            // Tính số tiền quy đổi cũ
-            $oldRate = (float) ($transaction->exchange_rate ?? 1.000000);
-            $oldAppliedAmount = (float) bcmul((string)$oldAmount, sprintf('%.6f', $oldRate), 4);
-
-            // Tính số tiền quy đổi mới
-            $newCurrency = $data['currency_code'] ?? $transaction->currency_code;
-            if (isset($data['exchange_rate'])) {
-                $newRate = (float) $data['exchange_rate'];
-            } elseif (isset($data['currency_code']) && $data['currency_code'] !== $transaction->currency_code) {
-                // Nếu thay đổi loại tiền nhưng không truyền tỷ giá, tự động fetch tỷ giá mới
-                $newRate = $this->exchangeRateService->getRate($newCurrency, $newWalletCurrency);
-            } elseif ($newWalletCurrency !== $oldWalletCurrency) {
-                // Nếu thay đổi ví và ví mới có tiền tệ khác ví cũ, tự động quy đổi lại theo tiền tệ ví mới
-                $newRate = $this->exchangeRateService->getRate($newCurrency, $newWalletCurrency);
-            } else {
-                $newRate = (float) ($transaction->exchange_rate ?? 1.000000);
+            $newType = $data['type'] ?? $transaction->type;
+            if ($newIsSplit && $newType !== 'expense') {
+                throw new \Exception("Chỉ cho phép thanh toán kết hợp nhiều ví đối với giao dịch chi tiêu (expense).");
             }
-            $newAppliedAmount = (float) bcmul((string)$newAmount, sprintf('%.6f', $newRate), 4);
 
-            // Quy đổi số tiền sang tiền tệ hiển thị của user (amount_in_user_currency)
             $userCurrency = DB::table('user_preferences')->where('user_id', $userId)->value('currency') ?? 'VND';
-            if ($newCurrency === $userCurrency) {
-                $newAmountInUserCurrency = $newAmount;
+
+            // --- BƯỚC 1: HOÀN TÁC SỐ DƯ CŨ (ROLLBACK) ---
+            if ($oldIsSplit) {
+                $oldSplits = DB::table('transaction_splits')->where('transaction_id', $id)->get();
+                $sortedOldSplits = $oldSplits->sortBy('wallet_id');
+                foreach ($sortedOldSplits as $oldSplit) {
+                    $walletBal = DB::table('wallet_balances')
+                        ->where('wallet_id', $oldSplit->wallet_id)
+                        ->lockForUpdate()
+                        ->first();
+                    if ($walletBal) {
+                        $revertedVal = bcadd($walletBal->available_balance, $oldSplit->amount, 2);
+                        DB::table('wallet_balances')->where('wallet_id', $oldSplit->wallet_id)->update([
+                            'available_balance' => $revertedVal,
+                            'updated_at' => now()
+                        ]);
+                    }
+                }
+                DB::table('transaction_splits')->where('transaction_id', $id)->delete();
             } else {
-                $rateToUserCurrency = $this->exchangeRateService->getRate($newCurrency, $userCurrency);
-                $newAmountInUserCurrency = (float) bcmul((string)$newAmount, sprintf('%.6f', $rateToUserCurrency), 4);
-            }
+                $oldWalletId = $transaction->wallet_id;
+                $oldWallet = DB::table('wallets')->where('id', $oldWalletId)->first();
+                $oldWalletCurrency = $oldWallet->currency_code ?? 'VND';
+                $oldRate = (float) ($transaction->exchange_rate ?? 1.0);
+                $oldAppliedAmount = (float) bcmul((string)$transaction->amount, sprintf('%.6f', $oldRate), 4);
 
-            // 1. Kiểm tra ví mới nếu thay đổi ví
-            if ($newWalletId !== $oldWalletId) {
-                $walletExists = DB::table('wallets')
-                    ->where('id', $newWalletId)
-                    ->where('user_id', $userId)
-                    ->whereNull('deleted_at')
-                    ->exists();
-                if (!$walletExists) {
-                    throw new \Exception(__('messages.wallet_not_found_or_unauthorized'));
-                }
-            }
-
-            // 2. Kiểm tra danh mục mới nếu thay đổi danh mục
-            if (isset($data['category_id']) && $data['category_id'] !== $transaction->category_id) {
-                $categoryExists = DB::table('categories')
-                    ->where('id', $data['category_id'])
-                    ->where(function ($q) use ($userId) {
-                        $q->where('user_id', $userId)
-                          ->orWhere('is_default', true);
-                    })
-                    ->whereNull('deleted_at')
-                    ->exists();
-                if (!$categoryExists) {
-                    throw new \Exception(__('messages.category_not_found_or_unauthorized'));
-                }
-            }
-
-            // 3. Cập nhật lại số dư ví (nếu thay đổi số tiền, tỷ giá, tiền tệ, loại giao dịch hoặc ví)
-            if ($oldWalletId !== $newWalletId || $oldAppliedAmount !== $newAppliedAmount || $oldType !== $newType) {
-                // Hoàn tác số dư ở ví cũ trước (sử dụng số tiền quy đổi cũ)
                 $oldWalletBalance = DB::table('wallet_balances')
                     ->where('wallet_id', $oldWalletId)
                     ->lockForUpdate()
@@ -505,7 +673,7 @@ class TransactionService
                 }
 
                 $revertedBalance = 0;
-                if ($oldType === 'expense') {
+                if ($transaction->type === 'expense') {
                     $revertedBalance = bcadd($oldWalletBalance->available_balance, $oldAppliedAmount, 2);
                 } else {
                     $revertedBalance = bcsub($oldWalletBalance->available_balance, $oldAppliedAmount, 2);
@@ -515,8 +683,152 @@ class TransactionService
                     'available_balance' => $revertedBalance,
                     'updated_at' => now()
                 ]);
+            }
 
-                // Áp dụng số dư mới ở ví mới (sử dụng số tiền quy đổi mới)
+            // --- BƯỚC 2: ÁP DỤNG SỐ DƯ MỚI (APPLY) ---
+            $newAmountInUserCurrency = 0.0;
+            $newCurrency = $data['currency_code'] ?? $transaction->currency_code;
+
+            if ($newIsSplit) {
+                $splitsData = $data['splits'];
+                // Kiểm tra trùng ví
+                $walletIdsInSplits = array_column($splitsData, 'wallet_id');
+                if (count($walletIdsInSplits) !== count(array_unique($walletIdsInSplits))) {
+                    throw new \Exception("Không được chọn trùng lặp ví trong cùng một giao dịch.");
+                }
+
+                // Sắp xếp ví theo ID tăng dần chống Deadlock
+                usort($splitsData, function ($a, $b) {
+                    return strcmp($a['wallet_id'], $b['wallet_id']);
+                });
+
+                $totalSplitUserAmount = 0.0;
+                $preparedSplits = [];
+                $walletBalancesToUpdate = [];
+
+                foreach ($splitsData as $splitItem) {
+                    $splitWalletId = $splitItem['wallet_id'];
+                    $splitAmount = (float) $splitItem['amount'];
+
+                    $splitWallet = DB::table('wallets')
+                        ->where('id', $splitWalletId)
+                        ->where('user_id', $userId)
+                        ->whereNull('deleted_at')
+                        ->first();
+
+                    if (!$splitWallet) {
+                        throw new \Exception("Không tìm thấy ví hoặc bạn không có quyền sử dụng ví này.");
+                    }
+
+                    $splitWalletCurrency = $splitWallet->currency_code ?? 'VND';
+                    $splitRate = $this->exchangeRateService->getRate($splitWalletCurrency, $userCurrency);
+                    $splitAmountInUserCurrency = (float) bcmul((string)$splitAmount, sprintf('%.6f', $splitRate), 4);
+                    
+                    $totalSplitUserAmount += $splitAmountInUserCurrency;
+
+                    $splitWalletBalance = DB::table('wallet_balances')
+                        ->where('wallet_id', $splitWalletId)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (!$splitWalletBalance) {
+                        throw new \Exception("Không tìm thấy số dư ví.");
+                    }
+
+                    if (bccomp($splitWalletBalance->available_balance, (string)$splitAmount, 2) === -1) {
+                        throw new \Exception("Số dư Ví '{$splitWallet->name}' không đủ để thực hiện giao dịch.");
+                    }
+
+                    $newSplitBalance = (float) bcsub($splitWalletBalance->available_balance, (string)$splitAmount, 2);
+
+                    $preparedSplits[] = [
+                        'wallet_id' => $splitWalletId,
+                        'amount' => $splitAmount,
+                        'amount_in_user_currency' => $splitAmountInUserCurrency,
+                        'exchange_rate' => $splitRate,
+                    ];
+
+                    $walletBalancesToUpdate[] = [
+                        'wallet_id' => $splitWalletId,
+                        'new_balance' => $newSplitBalance,
+                    ];
+                }
+
+                // Validate tổng tiền giao dịch chính
+                $amount = (float) (isset($data['amount']) ? $data['amount'] : $transaction->amount);
+                if ($newCurrency === $userCurrency) {
+                    $newAmountInUserCurrency = $amount;
+                } else {
+                    $rateToUserCurrency = $this->exchangeRateService->getRate($newCurrency, $userCurrency);
+                    $newAmountInUserCurrency = (float) bcmul((string)$amount, sprintf('%.6f', $rateToUserCurrency), 4);
+                }
+
+                // Validate sai số 0.02
+                if (abs($totalSplitUserAmount - $newAmountInUserCurrency) > 0.02) {
+                    throw new \Exception("Tổng số tiền phân tách của các ví (" . number_format($totalSplitUserAmount, 2) . " " . $userCurrency . ") không khớp với số tiền giao dịch chính (" . number_format($newAmountInUserCurrency, 2) . " " . $userCurrency . "). Sai lệch tối đa cho phép là 0.02.");
+                }
+
+                // Ghi vào bảng splits
+                foreach ($preparedSplits as $prepSplit) {
+                    DB::table('transaction_splits')->insert([
+                        'id' => (string) Str::uuid(),
+                        'transaction_id' => $id,
+                        'wallet_id' => $prepSplit['wallet_id'],
+                        'amount' => $prepSplit['amount'],
+                        'amount_in_user_currency' => $prepSplit['amount_in_user_currency'],
+                        'exchange_rate' => $prepSplit['exchange_rate'],
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+
+                // Cập nhật số dư
+                foreach ($walletBalancesToUpdate as $wb) {
+                    DB::table('wallet_balances')->where('wallet_id', $wb['wallet_id'])->update([
+                        'available_balance' => $wb['new_balance'],
+                        'last_transaction_id' => $id,
+                        'updated_at' => now()
+                    ]);
+                }
+
+                // Cập nhật giao dịch chính
+                $transaction->update([
+                    'wallet_id' => null,
+                    'category_id' => $data['category_id'] ?? $transaction->category_id,
+                    'type' => 'expense',
+                    'amount' => null,
+                    'amount_in_user_currency' => $newAmountInUserCurrency,
+                    'title' => $data['title'] ?? $transaction->title,
+                    'notes' => $data['notes'] ?? $transaction->notes,
+                    'transaction_date' => $data['transaction_date'] ?? $transaction->transaction_date,
+                    'currency_code' => $newCurrency,
+                    'exchange_rate' => $data['exchange_rate'] ?? 1.0,
+                    'timezone' => $data['timezone'] ?? $transaction->timezone,
+                    'status' => $data['status'] ?? $transaction->status,
+                    'is_split' => true,
+                ]);
+
+            } else {
+                $newWalletId = $data['wallet_id'] ?? $transaction->wallet_id;
+                $newWallet = DB::table('wallets')->where('id', $newWalletId)->first();
+                $newWalletCurrency = $newWallet->currency_code ?? 'VND';
+
+                $newAmount = isset($data['amount']) ? (float)$data['amount'] : (float)$transaction->amount;
+
+                if (isset($data['exchange_rate'])) {
+                    $newRate = (float) $data['exchange_rate'];
+                } else {
+                    $newRate = $this->exchangeRateService->getRate($newCurrency, $newWalletCurrency);
+                }
+                $newAppliedAmount = (float) bcmul((string)$newAmount, sprintf('%.6f', $newRate), 4);
+
+                if ($newCurrency === $userCurrency) {
+                    $newAmountInUserCurrency = $newAmount;
+                } else {
+                    $rateToUserCurrency = $this->exchangeRateService->getRate($newCurrency, $userCurrency);
+                    $newAmountInUserCurrency = (float) bcmul((string)$newAmount, sprintf('%.6f', $rateToUserCurrency), 4);
+                }
+
                 $newWalletBalance = DB::table('wallet_balances')
                     ->where('wallet_id', $newWalletId)
                     ->lockForUpdate()
@@ -528,7 +840,6 @@ class TransactionService
 
                 $appliedBalance = 0;
                 if ($newType === 'expense') {
-                    // Kiểm tra xem số dư ví mới sau khi hoàn tác ví cũ có đủ không
                     if (bccomp($newWalletBalance->available_balance, $newAppliedAmount, 2) === -1) {
                         throw new \Exception(__('messages.insufficient_balance'));
                     }
@@ -542,25 +853,25 @@ class TransactionService
                     'last_transaction_id' => $id,
                     'updated_at' => now()
                 ]);
+
+                $transaction->update([
+                    'wallet_id' => $newWalletId,
+                    'category_id' => $data['category_id'] ?? $transaction->category_id,
+                    'type' => $newType,
+                    'amount' => $newAmount,
+                    'amount_in_user_currency' => $newAmountInUserCurrency,
+                    'title' => $data['title'] ?? $transaction->title,
+                    'notes' => $data['notes'] ?? $transaction->notes,
+                    'transaction_date' => $data['transaction_date'] ?? $transaction->transaction_date,
+                    'currency_code' => $newCurrency,
+                    'exchange_rate' => $newRate,
+                    'timezone' => $data['timezone'] ?? $transaction->timezone,
+                    'status' => $data['status'] ?? $transaction->status,
+                    'is_split' => false,
+                ]);
             }
 
-            // 4. Cập nhật các trường thông tin giao dịch
-            $transaction->update([
-                'wallet_id' => $newWalletId,
-                'category_id' => $data['category_id'] ?? $transaction->category_id,
-                'type' => $newType,
-                'amount' => $newAmount,
-                'amount_in_user_currency' => $newAmountInUserCurrency,
-                'title' => $data['title'] ?? $transaction->title,
-                'notes' => $data['notes'] ?? $transaction->notes,
-                'transaction_date' => $data['transaction_date'] ?? $transaction->transaction_date,
-                'currency_code' => $newCurrency,
-                'exchange_rate' => $newRate,
-                'timezone' => $data['timezone'] ?? $transaction->timezone,
-                'status' => $data['status'] ?? $transaction->status
-            ]);
-
-            // 5. Cập nhật đính kèm
+            // --- BƯỚC 3: XỬ LÝ ĐÍNH KÈM & AUDIT LOG ---
             $filesToUpload = [];
             if ($attachment) {
                 $filesToUpload[] = $attachment;
@@ -574,7 +885,6 @@ class TransactionService
             }
 
             if (!empty($filesToUpload)) {
-                // Xóa đính kèm cũ (nếu có)
                 $oldAttachments = TransactionAttachment::where('transaction_id', $id)->get();
                 foreach ($oldAttachments as $oldAttach) {
                     $this->imageUploadService->deleteFromS3($oldAttach->file_url);
@@ -587,7 +897,6 @@ class TransactionService
                 $provider = (!empty($s3Key) && !empty($s3Secret) && !empty($s3Bucket)) ? 's3' : 'local';
 
                 foreach ($filesToUpload as $file) {
-                    // Upload đính kèm mới
                     $fileUrl = $this->imageUploadService->uploadToS3($file, 'receipts');
                     TransactionAttachment::create([
                         'id' => (string) Str::uuid7(),
@@ -602,7 +911,6 @@ class TransactionService
                 }
             }
 
-            // 6. Ghi log audit
             TransactionAudit::create([
                 'transaction_id' => $id,
                 'old_data' => $oldData,
@@ -610,10 +918,9 @@ class TransactionService
                 'changed_by' => $userId
             ]);
 
-            // Bắn sự kiện TransactionSaved
             event(new \App\Events\TransactionSaved($transaction, $oldData));
 
-            return $transaction->load('category', 'wallet', 'attachments');
+            return $transaction->load('category', 'wallet', 'attachments', 'splits.wallet');
         });
     }
 
@@ -623,7 +930,7 @@ class TransactionService
     public function deleteTransaction(string $id, string $userId)
     {
         return DB::transaction(function () use ($id, $userId) {
-            $transaction = Transaction::find($id);
+            $transaction = Transaction::where('id', $id)->lockForUpdate()->first();
 
             if (!$transaction || $transaction->user_id !== $userId) {
                 throw new \Exception(__('messages.transaction_not_found_or_unauthorized'));
@@ -720,27 +1027,45 @@ class TransactionService
                 }
             }
 
-            // GIAO DỊCH THƯỜNG (Manual hoặc Recurring)
-            $walletBalance = DB::table('wallet_balances')
-                ->where('wallet_id', $transaction->wallet_id)
-                ->lockForUpdate()
-                ->first();
-
-            if ($walletBalance) {
-                // Quy đổi số tiền cần hoàn trả bằng tỷ giá đã lưu của chính giao dịch đó
-                $appliedAmount = (float) bcmul((string)$transaction->amount, sprintf('%.6f', $transaction->exchange_rate ?? 1.000000), 4);
-
-                $revertedBalance = 0;
-                if ($transaction->type === 'expense') {
-                    $revertedBalance = bcadd($walletBalance->available_balance, $appliedAmount, 2);
-                } else {
-                    $revertedBalance = bcsub($walletBalance->available_balance, $appliedAmount, 2);
+            // GIAO DỊCH THƯỜNG (Manual hoặc Recurring) hoặc Split
+            if ($transaction->is_split) {
+                $splits = DB::table('transaction_splits')->where('transaction_id', $id)->get();
+                $sortedSplits = $splits->sortBy('wallet_id');
+                foreach ($sortedSplits as $split) {
+                    $walletBalance = DB::table('wallet_balances')
+                        ->where('wallet_id', $split->wallet_id)
+                        ->lockForUpdate()
+                        ->first();
+                    if ($walletBalance) {
+                        $revertedBalance = bcadd($walletBalance->available_balance, $split->amount, 2);
+                        DB::table('wallet_balances')->where('wallet_id', $split->wallet_id)->update([
+                            'available_balance' => $revertedBalance,
+                            'updated_at' => now()
+                        ]);
+                    }
                 }
+            } else {
+                $walletBalance = DB::table('wallet_balances')
+                    ->where('wallet_id', $transaction->wallet_id)
+                    ->lockForUpdate()
+                    ->first();
 
-                DB::table('wallet_balances')->where('wallet_id', $transaction->wallet_id)->update([
-                    'available_balance' => $revertedBalance,
-                    'updated_at' => now()
-                ]);
+                if ($walletBalance) {
+                    // Quy đổi số tiền cần hoàn trả bằng tỷ giá đã lưu của chính giao dịch đó
+                    $appliedAmount = (float) bcmul((string)$transaction->amount, sprintf('%.6f', $transaction->exchange_rate ?? 1.000000), 4);
+
+                    $revertedBalance = 0;
+                    if ($transaction->type === 'expense') {
+                        $revertedBalance = bcadd($walletBalance->available_balance, $appliedAmount, 2);
+                    } else {
+                        $revertedBalance = bcsub($walletBalance->available_balance, $appliedAmount, 2);
+                    }
+
+                    DB::table('wallet_balances')->where('wallet_id', $transaction->wallet_id)->update([
+                        'available_balance' => $revertedBalance,
+                        'updated_at' => now()
+                    ]);
+                }
             }
 
             // Xóa file đính kèm khỏi S3/local

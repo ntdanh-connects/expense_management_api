@@ -39,6 +39,8 @@ Route::middleware(['custom.auth'])->group(function () {
     Route::put('/ai-conversations/{id}', [\App\Http\Controllers\AiChatController::class, 'updateConversation']);
     Route::delete('/ai-conversations/{id}', [\App\Http\Controllers\AiChatController::class, 'deleteConversation']);
     Route::post('/ai-digest', [DashboardController::class,'getCashflowDigest']);
+    Route::get('/ai/habit-analyses', [\App\Http\Controllers\AIHabitAnalysisController::class, 'index']);
+    Route::post('/ai/habit-analyses/{id}/read', [\App\Http\Controllers\AIHabitAnalysisController::class, 'markAsRead']);
 
     // API Aggregation cho màn hình Dashboard chính
     Route::get('/dashboard/summary', [DashboardController::class, 'summary']);

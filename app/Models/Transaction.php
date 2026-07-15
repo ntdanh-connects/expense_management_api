@@ -33,7 +33,8 @@ class Transaction extends Model
         'timezone',
         'transaction_date',
         'source_type',
-        'source_id'
+        'source_id',
+        'is_split'
     ];
 
     protected $casts = [
@@ -41,6 +42,7 @@ class Transaction extends Model
         'exchange_rate' => 'decimal:6',
         'amount_in_user_currency' => 'decimal:2',
         'transaction_date' => 'datetime',
+        'is_split' => 'boolean',
     ];
 
     protected $appends = [];
@@ -129,6 +131,11 @@ class Transaction extends Model
             'wallet_name' => $senderWallet ? $senderWallet->name : null,
             'identifier' => $senderUser ? $senderUser->identifier : null,
         ];
+    }
+
+    public function splits()
+    {
+        return $this->hasMany(TransactionSplit::class, 'transaction_id', 'id');
     }
 }
 

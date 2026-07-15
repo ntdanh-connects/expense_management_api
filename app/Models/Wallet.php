@@ -16,12 +16,16 @@ class Wallet extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
-        'id', 'user_id', 'name', 'type', 'currency_code', 'icon', 'color', 'is_hidden', 'bank_code', 'account_number', 'is_default_receiving'
+        'id', 'user_id', 'name', 'type', 'currency_code', 'icon', 'color', 'is_hidden', 'bank_code', 'account_number', 'is_default_receiving',
+        'minimum_balance', 'is_minimum_balance_alert_enabled', 'last_alert_sent_at'
     ];
 
     protected $casts = [
         'is_hidden' => 'boolean',
         'is_default_receiving' => 'boolean',
+        'minimum_balance' => 'decimal:2',
+        'is_minimum_balance_alert_enabled' => 'boolean',
+        'last_alert_sent_at' => 'datetime'
     ];
 
     /**
