@@ -33,6 +33,16 @@ class AIHabitAnalysisService
             ->whereNull('deleted_at')
             ->sum('amount_in_user_currency');
 
+        // Nếu ngày hôm nay không có giao dịch chi tiêu nào, không thực hiện phân tích
+        if ($actualAmount == 0) {
+            DB::table('ai_habit_analyses')
+                ->where('user_id', $userId)
+                ->where('type', 'daily')
+                ->where('analysis_date', $analysisDateStr)
+                ->delete();
+            return;
+        }
+
         // 2. Tính chi tiêu trung bình 30 ngày trước đó (không gồm ngày mục tiêu)
         $past30DaysStart = $targetDate->copy()->subDays(30)->startOfDay()->timezone($timezone)->utc();
         $past30DaysEnd = $targetDate->copy()->subDay()->endOfDay()->timezone($timezone)->utc();
