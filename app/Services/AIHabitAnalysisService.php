@@ -33,16 +33,6 @@ class AIHabitAnalysisService
             ->whereNull('deleted_at')
             ->sum('amount_in_user_currency');
 
-        // Nếu ngày hôm nay không có giao dịch chi tiêu nào, không thực hiện phân tích
-        if ($actualAmount == 0) {
-            DB::table('ai_habit_analyses')
-                ->where('user_id', $userId)
-                ->where('type', 'daily')
-                ->where('analysis_date', $analysisDateStr)
-                ->delete();
-            return;
-        }
-
         // 2. Tính chi tiêu trung bình 30 ngày trước đó (không gồm ngày mục tiêu)
         $past30DaysStart = $targetDate->copy()->subDays(30)->startOfDay()->timezone($timezone)->utc();
         $past30DaysEnd = $targetDate->copy()->subDay()->endOfDay()->timezone($timezone)->utc();
@@ -92,10 +82,12 @@ class AIHabitAnalysisService
                 $prompt .= "- {$tx->title}: " . number_format($tx->amount_in_user_currency, 0) . " VND" . ($tx->notes ? " ({$tx->notes})" : "") . "\n";
             }
 
-            $systemInstruction = "Bạn là chuyên gia phân tích tài chính cá nhân. Hãy phân tích mức chi tiêu hôm nay so với trung bình 30 ngày của người dùng."
-                . " Tập trung đưa ra lời khuyên ngắn gọn, thực tế và hành động được trong 2-3 câu. "
-                . "Nếu chi tiêu tăng đột biến (>50%), hãy cảnh báo nhẹ nhàng và chỉ ra khoản chi lớn nhất. "
-                . "Nếu chi tiêu thấp hoặc tiết kiệm, hãy động viên họ.";
+            $systemInstruction = "Bạn là chuyên gia phân tích tài chính cá nhân. Hãy phân tích chi tiêu hôm nay của người dùng so với trung bình 30 ngày qua.\n"
+                . "Hãy viết một báo cáo súc tích trong 3-4 câu bao gồm:\n"
+                . "1. Tổng kết chi tiêu trong ngày: Đánh giá nhanh mức tăng/giảm chi tiêu hôm nay so với trung bình.\n"
+                . "2. Danh mục nổi bật: Chỉ ra những danh mục hoặc khoản chi tiêu nhiều nhất hôm nay.\n"
+                . "3. Giao dịch bất thường: Nhận diện bất kỳ giao dịch nào lớn đột biến hoặc có dấu hiệu bất thường cần lưu ý (nếu có).\n"
+                . "Hãy phản hồi bằng Tiếng Việt với giọng điệu khách quan, chuyên nghiệp, mang tính xây dựng.";
 
             $aiInsight = $this->callGemini($prompt, $systemInstruction);
         } else {
@@ -166,16 +158,47 @@ class AIHabitAnalysisService
             ->limit(5)
             ->get();
 
+        // Lấy danh mục vượt hạn mức ngân sách tháng này
+        $overBudgets = DB::table('budgets')
+            ->join('budget_usages', 'budgets.id', '=', 'budget_usages.budget_id')
+            ->join('categories', 'budgets.category_id', '=', 'categories.id')
+            ->where('budgets.user_id', $userId)
+            ->where('budgets.month', $targetDate->month)
+            ->where('budgets.year', $targetDate->year)
+            ->whereRaw('budget_usages.used_amount > budgets.limit_amount')
+            ->select('categories.name', 'budgets.limit_amount', 'budget_usages.used_amount')
+            ->get();
+
+        // Lấy tổng thu nhập tháng này để tính xu hướng tiết kiệm
+        $totalIncome = (float) DB::table('transactions')
+            ->where('user_id', $userId)
+            ->where('type', 'income')
+            ->whereBetween('transaction_date', [$currentMonthStart, $currentMonthEnd])
+            ->whereNull('deleted_at')
+            ->sum('amount_in_user_currency');
+
         $prompt = "Tổng chi tiêu tháng này ({$periodRange}): " . number_format($actualAmount, 0) . " VND.\n";
         $prompt .= "Tổng chi tiêu tháng trước: " . number_format($baselineAmount, 0) . " VND.\n";
         $prompt .= "Độ lệch chi tiêu Month-over-Month (MoM): " . ($percentChange >= 0 ? '+' : '') . $percentChange . "%.\n";
+        $prompt .= "Tổng thu nhập tháng này: " . number_format($totalIncome, 0) . " VND.\n";
         $prompt .= "Top 5 danh mục chi tiêu lớn nhất tháng này:\n";
         foreach ($topCategories as $cat) {
             $prompt .= "- {$cat->name}: " . number_format($cat->total_amount, 0) . " VND\n";
         }
+        if ($overBudgets->isNotEmpty()) {
+            $prompt .= "Danh mục vượt hạn mức ngân sách tháng này:\n";
+            foreach ($overBudgets as $ob) {
+                $prompt .= "- {$ob->name}: Thực tế tiêu " . number_format($ob->used_amount, 0) . " VND / Hạn mức " . number_format($ob->limit_amount, 0) . " VND\n";
+            }
+        } else {
+            $prompt .= "Không có danh mục nào chi tiêu vượt hạn mức ngân sách.\n";
+        }
 
-        $systemInstruction = "Bạn là chuyên gia phân tích tài chính cá nhân. Hãy so sánh chi tiêu tháng này với tháng trước (MoM) và phân tích các danh mục chi tiêu chính. "
-            . "Đưa ra lời khuyên chiến lược chi tiêu cho tháng tiếp theo và đề xuất cách cắt giảm ở các danh mục lớn nhất. Giới hạn trong khoảng 3-4 câu ngắn gọn, súc tích.";
+        $systemInstruction = "Bạn là cố vấn tài chính cá nhân chuyên nghiệp. Hãy viết báo cáo phân tích chi tiêu hàng tháng cho người dùng bằng Tiếng Việt gồm 3 phần:\n"
+            . "1. So sánh chi tiêu với tháng trước: Phân tích biến động tăng giảm tổng quan MoM.\n"
+            . "2. Xu hướng tiết kiệm: Đánh giá tỷ lệ tiết kiệm dựa trên tổng thu nhập và chi tiêu tháng này.\n"
+            . "3. Cảnh báo vượt ngân sách: Nhận định và đưa ra lời khuyên thiết thực để giảm chi phí ở những danh mục chi tiêu vượt hạn mức hoặc chiếm tỷ trọng quá lớn.\n"
+            . "Yêu cầu: Viết súc tích trong 4-5 câu ngắn gọn, có lời khuyên cụ thể, hành động được.";
 
         $aiInsight = $this->callGemini($prompt, $systemInstruction);
 
@@ -249,8 +272,10 @@ class AIHabitAnalysisService
             $prompt .= "- Tháng " . intval($ms->month) . ": " . number_format($ms->total_amount, 0) . " VND\n";
         }
 
-        $systemInstruction = "Bạn là cố vấn tài chính vĩ mô cá nhân. Phân tích xu hướng chi tiêu năm nay của người dùng so với năm ngoái, "
-            . "nhận diện các tháng có mức chi tiêu bất thường và đưa ra định hướng kế hoạch quản lý tài chính dài hạn, bền vững cho năm tiếp theo. Viết trong 4-5 câu súc tích.";
+        $systemInstruction = "Bạn là cố vấn tài chính vĩ mô cá nhân chuyên nghiệp. Hãy viết báo cáo phân tích tài chính năm cho người dùng bằng Tiếng Việt gồm 2 phần:\n"
+            . "1. Đánh giá tổng quan tài chính cả năm: Nhận diện xu hướng thu chi vĩ mô qua các tháng và so sánh với năm ngoái.\n"
+            . "2. Mục tiêu và khuyến nghị cho năm tới: Đề xuất mục tiêu tích lũy cụ thể và định hướng phân bổ dòng tiền bền vững.\n"
+            . "Yêu cầu: Viết súc tích trong 4-5 câu, mang tính định hướng chiến lược cao.";
 
         $aiInsight = $this->callGemini($prompt, $systemInstruction);
 
