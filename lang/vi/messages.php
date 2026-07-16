@@ -58,6 +58,7 @@ return [
     'unauthorized_merge_source' => 'Bạn không có quyền thao tác trên danh mục nguồn!',
     'unauthorized_merge_target' => 'Bạn không có quyền thao tác trên danh mục đích!',
     'merge_different_levels' => 'Chỉ cho phép gộp hai danh mục cùng cấp độ (cùng là nhóm cha hoặc cùng là nhóm con)!',
+    'category_name_exists' => 'Tên danh mục này đã tồn tại, vui lòng chọn tên khác!',
 
     // Wallet controller successes
     'sync_wallets_success' => 'Đồng bộ danh sách ví thành công!',

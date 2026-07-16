@@ -58,6 +58,7 @@ return [
     'unauthorized_merge_source' => 'You do not have permission to operate on the source category!',
     'unauthorized_merge_target' => 'You do not have permission to operate on the target category!',
     'merge_different_levels' => 'Only categories of the same level (both parent or both child) are allowed to be merged!',
+    'category_name_exists' => 'This category name already exists, please choose a different name!',
 
     // Wallet controller successes
     'sync_wallets_success' => 'Synced wallets list successfully!',

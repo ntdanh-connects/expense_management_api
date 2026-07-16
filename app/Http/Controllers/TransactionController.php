@@ -126,10 +126,22 @@ class TransactionController extends Controller
             $transaction = $this->transactionService->createTransaction($userId, $validated, $request->file('attachment'), $request->file('attachments'));
             $transaction->append(['is_transfer_locked', 'sender']);
 
+            // Gọi AI kiểm tra thói quen chi tiêu
+            $aiAlert = null;
+            if ($validated['type'] === 'expense') {
+                try {
+                    $aiDigestService = app(\App\Services\AIDigestService::class);
+                    $aiAlert = $aiDigestService->generateHabitAlert($userId, $validated['wallet_id'], $validated['amount']);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::error("Failed to run AI habit check: " . $e->getMessage());
+                }
+            }
+
             return response()->json([
                 'status'  => 'success',
                 'message' => __('messages.create_transaction_success'),
-                'data'    => $transaction
+                'data'    => $transaction,
+                'ai_alert' => $aiAlert
             ], 201);
 
         } catch (\Throwable $e) {

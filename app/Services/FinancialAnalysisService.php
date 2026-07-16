@@ -61,4 +61,29 @@ class FinancialAnalysisService{
             'today' => $today
         ]);
     }
+
+    public function learnUserSpendingHabits(string $userId)
+    {
+        // Lấy trung bình chi tiêu hàng ngày từ ví Tiền mặt trong 30 ngày qua
+        $averageCashSpend = DB::table('transactions')
+            ->join('wallets', 'transactions.wallet_id', '=', 'wallets.id')
+            ->where('transactions.user_id', $userId) //chỉ lấy giao dịch của user hiện tại
+            ->whereNull('transactions.deleted_at') //chỉ lấy giao dịch chưa bị xóa
+            ->where('transactions.status', 'completed') //chỉ lấy giao dịch đã hoàn thành
+            ->where('transactions.type', 'expense') //chỉ lấy giao dịch chi tiêu
+            ->where('wallets.type', 'cash') // Lọc ví tiền mặt
+            ->where('transactions.transaction_date', '>=', now()->subDays(30))//chỉ lấy giao dịch trong 30 ngày qua
+            ->select(DB::raw('SUM(transactions.amount_in_user_currency) / 30 as daily_avg'))
+            ->value('daily_avg') ?? 0;//nếu không có giao dịch thì trả về 0
+        $persona = [
+            'average_daily_cash_spend' => round($averageCashSpend), //làm tròn số
+            'last_analyzed_at' => now()->toDateTimeString(), //lấy thời gian hiện tại
+        ];
+        // Lưu vào bảng ai_user_profiles
+        DB::table('ai_user_profiles')->updateOrInsert(
+            ['user_id' => $userId],
+            ['spending_persona' => json_encode($persona), 'updated_at' => now()]
+        );
+        return $persona;
+    }
 }

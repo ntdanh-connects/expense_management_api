@@ -114,6 +114,25 @@ class CategoryService
                 $data['type'] = $parent->type;
             }
 
+            $type = $data['type'] ?? 'expense';
+            $name = trim($data['name']);
+
+            // Ràng buộc duy nhất: Không cho phép tạo trùng tên danh mục trong cùng một Type (Thu nhập / Chi tiêu)
+            $exists = \App\Models\Category::where('type', $type)
+                ->where(function ($query) use ($userId) {
+                    $query->where('user_id', $userId)
+                          ->orWhere(function ($q) {
+                              $q->whereNull('user_id')
+                                ->where('is_default', true);
+                          });
+                })
+                ->whereRaw('LOWER(TRIM(name)) = ?', [Str::lower($name)])
+                ->exists();
+
+            if ($exists) {
+                throw new \Exception(__('messages.category_name_exists'));
+            }
+
             // Gán các thông tin mặc định cho danh mục custom
             $data['user_id'] = $userId;
             $data['is_default'] = false;
@@ -148,6 +167,26 @@ class CategoryService
         // Chặn không cho đổi loại (Thu nhập/Chi tiêu) nếu nó đang có danh mục cha hoặc con để tránh sai lệch cấu trúc
         if (isset($data['type']) && $data['type'] !== $category->type) {
             throw new \Exception(__('messages.cannot_change_category_type'));
+        }
+
+        if (isset($data['name'])) {
+            $name = trim($data['name']);
+            // Ràng buộc duy nhất: Không cho phép đổi tên trùng với danh mục khác cùng loại
+            $exists = \App\Models\Category::where('id', '!=', $categoryId)
+                ->where('type', $category->type)
+                ->where(function ($query) use ($userId) {
+                    $query->where('user_id', $userId)
+                          ->orWhere(function ($q) {
+                              $q->whereNull('user_id')
+                                ->where('is_default', true);
+                          });
+                })
+                ->whereRaw('LOWER(TRIM(name)) = ?', [Str::lower($name)])
+                ->exists();
+
+            if ($exists) {
+                throw new \Exception(__('messages.category_name_exists'));
+            }
         }
 
         $category->update($data);
