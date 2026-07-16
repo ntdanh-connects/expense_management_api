@@ -149,6 +149,7 @@ class TransactionController extends Controller
             }
  
             $transaction = $this->transactionService->createTransaction($userId, $validated, $request->file('attachment'), $request->file('attachments'));
+            $transaction->load(['category', 'wallet', 'attachments', 'payee', 'splits.wallet']);
             $transaction->append(['is_transfer_locked', 'sender']);
 
             // Gọi AI kiểm tra thói quen chi tiêu

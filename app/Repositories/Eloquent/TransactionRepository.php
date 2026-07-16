@@ -16,7 +16,7 @@ class TransactionRepository extends BaseRepository implements TransactionReposit
     public function getFilteredTransactions(string $userId, array $filters, string $sortBy, string $sortOrder, int $perPage)
     {
         $query = $this->model->newQuery()
-            ->with(['category', 'wallet', 'attachments', 'payee'])
+            ->with(['category', 'wallet', 'attachments', 'payee', 'splits.wallet'])
             ->where('transactions.user_id', $userId);
 
         // 1. Tìm kiếm theo từ khóa (tiêu đề, ghi chú)
