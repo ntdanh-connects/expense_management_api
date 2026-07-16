@@ -19,7 +19,7 @@ class CategoryRepository extends BaseRepository implements CategoryRepositoryInt
         return Category::with(['children' => function ($query) use ($userId) {
                 $query->where(function ($q) use ($userId) {
                     $q->whereNull('user_id')
-                      ->where('is_default', true);
+                      ->whereRaw('"is_default" IS TRUE');
                 })->orWhere('user_id', $userId)
                   ->orderBy('sort_order', 'asc');
             }])
@@ -27,7 +27,7 @@ class CategoryRepository extends BaseRepository implements CategoryRepositoryInt
             ->where(function ($query) use ($userId) {
                 $query->where(function ($q) {
                     $q->whereNull('user_id')
-                      ->where('is_default', true);
+                      ->whereRaw('"is_default" IS TRUE');
                 })->orWhere('user_id', $userId);
             })
             ->orderBy('sort_order', 'asc')

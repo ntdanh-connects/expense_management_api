@@ -40,7 +40,7 @@ class BudgetService
                     ->where('id', $categoryId)
                     ->where(function ($q) use ($userId) {
                         $q->where('user_id', $userId)
-                          ->orWhere('is_default', true);
+                          ->orWhereRaw('"is_default" IS TRUE');
                     })
                     ->whereNull('deleted_at')
                     ->first();

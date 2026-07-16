@@ -55,7 +55,7 @@ class CategoryService
     {
         // 1. Kiểm tra xem DB đã có danh mục hệ thống nào chưa.
         // Nếu trống rỗng, tự động seed ngay lập tức.
-        $defaultCount = DB::table('categories')->whereNull('user_id')->where('is_default', true)->count();
+        $defaultCount = DB::table('categories')->whereNull('user_id')->whereRaw('"is_default" IS TRUE')->count();
         if ($defaultCount === 0) {
             $this->seedDefaultMomoCategories();
         }
@@ -123,7 +123,7 @@ class CategoryService
                     $query->where('user_id', $userId)
                           ->orWhere(function ($q) {
                               $q->whereNull('user_id')
-                                ->where('is_default', true);
+                                ->whereRaw('"is_default" IS TRUE');
                           });
                 })
                 ->whereRaw('LOWER(TRIM(name)) = ?', [Str::lower($name)])
@@ -178,7 +178,7 @@ class CategoryService
                     $query->where('user_id', $userId)
                           ->orWhere(function ($q) {
                               $q->whereNull('user_id')
-                                ->where('is_default', true);
+                                ->whereRaw('"is_default" IS TRUE');
                           });
                 })
                 ->whereRaw('LOWER(TRIM(name)) = ?', [Str::lower($name)])
@@ -218,7 +218,7 @@ class CategoryService
             if ($category->parent_id === null) {
                 DB::table('categories')
                     ->where('parent_id', $category->id)
-                    ->where('is_default', false)
+                    ->whereRaw('"is_default" IS FALSE')
                     ->update(['deleted_at' => now()]);
             }
 

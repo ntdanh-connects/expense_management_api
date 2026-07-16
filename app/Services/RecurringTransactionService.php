@@ -59,7 +59,7 @@ class RecurringTransactionService
                 ->where('id', $data['category_id'])
                 ->where(function ($q) use ($userId) {
                     $q->where('user_id', $userId)
-                      ->orWhere('is_default', true);
+                      ->orWhereRaw('"is_default" IS TRUE');
                 })
                 ->whereNull('deleted_at')
                 ->exists();
@@ -127,7 +127,7 @@ class RecurringTransactionService
                 ->where('id', $data['category_id'])
                 ->where(function ($q) use ($userId) {
                     $q->where('user_id', $userId)
-                      ->orWhere('is_default', true);
+                      ->orWhereRaw('"is_default" IS TRUE');
                 })
                 ->whereNull('deleted_at')
                 ->exists();
@@ -294,7 +294,7 @@ class RecurringTransactionService
                                             ->where('user_id', $payee->payee_user_id)
                                             ->whereIn('type', ['bank', 'ewallet'])
                                             ->where('currency_code', 'VND')
-                                            ->where('is_default_receiving', true)
+                                            ->whereRaw('"is_default_receiving" IS TRUE')
                                             ->whereNull('deleted_at')
                                             ->first();
 

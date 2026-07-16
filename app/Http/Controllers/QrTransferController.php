@@ -95,7 +95,7 @@ class QrTransferController extends Controller
                     ->where('user_id', $recipient->user_id)
                     ->whereIn('type', ['bank', 'ewallet'])
                     ->where('currency_code', 'VND')
-                    ->where('is_default_receiving', true)
+                    ->whereRaw('"is_default_receiving" IS TRUE')
                     ->whereNull('deleted_at')
                     ->first();
             }
@@ -359,7 +359,7 @@ class QrTransferController extends Controller
                         ->where('user_id', $recipientId)
                         ->whereIn('type', ['bank', 'ewallet'])
                         ->where('currency_code', 'VND')
-                        ->where('is_default_receiving', true)
+                        ->whereRaw('"is_default_receiving" IS TRUE')
                         ->whereNull('deleted_at')
                         ->first();
                 }

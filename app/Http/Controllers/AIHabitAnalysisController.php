@@ -32,15 +32,42 @@ class AIHabitAnalysisController extends Controller
                 ->orderByDesc('created_at')
                 ->paginate(15);
 
+            // Xây dựng analysis_data cho FE: FE parse `analysis_data['summary']`
+            // còn BE lưu từng trường riêng (ai_insight, actual_amount, ...)
+            $transformed = $analyses->getCollection()->map(function ($item) {
+                $statusLabel = match ($item->status ?? 'normal') {
+                    'overspending' => 'Chi tiêu cao hơn bình thường',
+                    'saving'       => 'Tiết kiệm tốt hơn bình thường',
+                    default        => 'Chi tiêu bình thường',
+                };
+
+                $item->analysis_data = [
+                    'summary'          => $item->ai_insight ?? '',
+                    'Trạng thái'       => $statusLabel,
+                    'Chi tiêu thực tế' => number_format((float)($item->actual_amount ?? 0), 0, ',', '.') . ' ₫',
+                    'Chi tiêu cơ sở'   => number_format((float)($item->baseline_amount ?? 0), 0, ',', '.') . ' ₫',
+                    'Chênh lệch'       => (($item->diff_amount ?? 0) >= 0 ? '+' : '')
+                                          . number_format((float)($item->diff_amount ?? 0), 0, ',', '.') . ' ₫',
+                    'Thay đổi (%)'     => (($item->percent_change ?? 0) >= 0 ? '+' : '')
+                                          . number_format((float)($item->percent_change ?? 0), 2) . '%',
+                    'Chu kỳ'           => $item->period_range ?? '',
+                ];
+
+                return $item;
+            });
+
+            $analyses->setCollection($transformed);
+
             return response()->json([
                 'status' => 'success',
-                'data' => $analyses
+                'data'   => $analyses
             ], 200);
 
         } catch (\Throwable $e) {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     }
+
 
     /**
      * Đánh dấu phân tích là đã đọc

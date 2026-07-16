@@ -101,7 +101,7 @@ class ImportTransactionsJob implements ShouldQueue
             $categoriesCache = DB::table('categories')
                 ->where(function ($q) {
                     $q->where('user_id', $this->userId)
-                      ->orWhere('is_default', true);
+                      ->orWhereRaw('"is_default" IS TRUE');
                 })
                 ->whereNull('deleted_at')
                 ->pluck('id', 'name')
