@@ -259,7 +259,7 @@ class AIHabitAnalysisService
             ->first();
 
         $id = $existing ? $existing->id : (string) Str::uuid();
-        $isRead = $existing ? $existing->is_read : false;
+        $isRead = $existing ? (bool) $existing->is_read : false;
 
         DB::table('ai_habit_analyses')->updateOrInsert(
             [
@@ -276,7 +276,9 @@ class AIHabitAnalysisService
                 'percent_change' => $percentChange,
                 'status' => $status,
                 'ai_insight' => $aiInsight,
-                'is_read' => $isRead,
+                // PDO với ATTR_EMULATE_PREPARES convert bool -> 0/1 (integer)
+                // PostgreSQL strict boolean không chấp nhận, dùng DB::raw để bypass
+                'is_read' => DB::raw($isRead ? 'true' : 'false'),
                 'created_at' => $existing ? $existing->created_at : now(),
                 'updated_at' => now()
             ]
