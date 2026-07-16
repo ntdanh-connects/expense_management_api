@@ -144,7 +144,7 @@ class WalletController extends Controller {
             ]);
 
             // Strip HTML tags
-            $validated['notes'] = strip_tags($validated['notes']);
+            $validated['notes'] = strip_tags($validated['notes'] ?? '');
 
             $result = $this->walletService->transferMoney($userId, $validated);
 
