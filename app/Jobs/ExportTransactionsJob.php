@@ -83,12 +83,22 @@ class ExportTransactionsJob implements ShouldQueue
                 'transactions.amount',
                 'transactions.currency_code',
                 'transactions.amount_in_user_currency',
+                'transactions.is_split',
                 'wallets.name as wallet_name',
                 'categories.name as category_name',
                 'transactions.title',
                 'transactions.notes',
                 'transactions.status'
             )->orderBy('transactions.transaction_date', 'desc')->get();
+
+            // Lấy toàn bộ splits cho các giao dịch trong list
+            $txIds = $transactions->pluck('id')->toArray();
+            $splitsGrouped = DB::table('transaction_splits')
+                ->join('wallets', 'transaction_splits.wallet_id', '=', 'wallets.id')
+                ->whereIn('transaction_splits.transaction_id', $txIds)
+                ->select('transaction_splits.transaction_id', 'wallets.name as wallet_name')
+                ->get()
+                ->groupBy('transaction_id');
 
             // 3. Tạo file Excel (.xlsx) sử dụng PhpSpreadsheet
             $spreadsheet = new Spreadsheet();
@@ -118,12 +128,24 @@ class ExportTransactionsJob implements ShouldQueue
             // Viết Dữ liệu
             $rowIndex = 2;
             foreach ($transactions as $tx) {
+                $walletName = $tx->wallet_name;
+                if ($tx->is_split) {
+                    $txSplits = $splitsGrouped->get($tx->id);
+                    if ($txSplits) {
+                        $walletName = $txSplits->pluck('wallet_name')->implode(' + ');
+                    } else {
+                        $walletName = 'Ví kết hợp';
+                    }
+                }
+
                 $sheet->setCellValue([1, $rowIndex], $tx->id);
                 $sheet->setCellValue([2, $rowIndex], Carbon::parse($tx->transaction_date)->toDateTimeString());
                 $sheet->setCellValue([3, $rowIndex], $tx->type === 'income' ? 'Thu nhập' : 'Chi tiêu');
-                $sheet->setCellValue([4, $rowIndex], (float) $tx->amount);
+                
+                $amountToShow = $tx->amount !== null ? (float)$tx->amount : (float)$tx->amount_in_user_currency;
+                $sheet->setCellValue([4, $rowIndex], $amountToShow);
                 $sheet->setCellValue([5, $rowIndex], $tx->currency_code);
-                $sheet->setCellValue([6, $rowIndex], $tx->wallet_name ?? 'Ví đã xóa');
+                $sheet->setCellValue([6, $rowIndex], $walletName ?? 'Ví đã xóa');
                 $sheet->setCellValue([7, $rowIndex], $tx->category_name ?? 'Không phân mục');
                 
                 // Tiêu đề & Ghi chú ép kiểu string tường minh

@@ -74,9 +74,16 @@ class TransactionController extends Controller
                 return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
             }
 
+            if (is_string($request->input('splits'))) {
+                $decoded = json_decode($request->input('splits'), true);
+                if (is_array($decoded)) {
+                    $request->merge(['splits' => $decoded]);
+                }
+            }
+
             $validated = $request->validate([
                 'id'               => 'nullable|uuid',
-                'wallet_id'        => 'required|uuid',
+                'wallet_id'        => 'required_without:splits|nullable|uuid',
                 'category_id'      => 'nullable|uuid',
                 'payee_id'         => 'nullable|uuid|exists:saved_payees,id',
                 'type'             => 'required|string|in:income,expense',
@@ -90,37 +97,55 @@ class TransactionController extends Controller
                 'attachment'       => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400', // Tối đa 100MB
                 'attachments'      => 'nullable|array',
                 'attachments.*'    => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400',
-                'source_type'      => 'nullable|string|in:manual,recurring,transfer,adjustment,import'
+                'source_type'      => 'nullable|string|in:manual,recurring,transfer,adjustment,import',
+                'splits'           => 'nullable|array|min:2',
+                'splits.*.wallet_id'=> 'required_with:splits|uuid',
+                'splits.*.amount'  => 'required_with:splits|numeric|min:1000',
             ]);
 
             // Strip HTML tags & set default notes if empty
             $validated['title'] = strip_tags($validated['title']);
             $validated['notes'] = empty($validated['notes']) ? 'Không có nội dung' : strip_tags($validated['notes']);
 
-            $wallet = DB::table('wallets')->where('id', $validated['wallet_id'])->where('user_id', $userId)->first();
-            if (!$wallet) {
-                return response()->json(['status' => 'error', 'message' => __('messages.wallet_not_found_or_unauthorized')], 404);
-            }
+            $isSplit = isset($validated['splits']) && is_array($validated['splits']) && count($validated['splits']) > 1;
 
-            $sourceType = $validated['source_type'] ?? 'manual';
-            $txType = $validated['type'];
-            if ($txType === 'expense' && $sourceType === 'manual' && $wallet->type !== 'cash') {
-                if (empty($validated['payee_id'])) {
-                    return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công qua ví ngân hàng hoặc ví điện tử bắt buộc phải có người hưởng thụ.'], 400);
-                }
-            }
-
-            if ($sourceType === 'manual' && in_array($wallet->type, ['bank', 'ewallet'])) {
-                if (!empty($validated['category_id'])) {
-                    $category = DB::table('categories')->where('id', $validated['category_id'])->first();
-                    if ($category && $category->type === 'income') {
-                        return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_no_income_category')], 400);
+            if ($isSplit) {
+                // Kiểm tra các ví trong splits
+                foreach ($validated['splits'] as $splitItem) {
+                    $w = DB::table('wallets')->where('id', $splitItem['wallet_id'])->where('user_id', $userId)->whereNull('deleted_at')->first();
+                    if (!$w) {
+                        return response()->json(['status' => 'error', 'message' => 'Ví trong danh sách kết hợp không hợp lệ hoặc không thuộc quyền sở hữu của bạn.'], 404);
+                    }
+                    if ($w->currency_code !== 'VND') {
+                        return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_vnd_only')], 400);
                     }
                 }
-            }
+            } else {
+                $wallet = DB::table('wallets')->where('id', $validated['wallet_id'])->where('user_id', $userId)->whereNull('deleted_at')->first();
+                if (!$wallet) {
+                    return response()->json(['status' => 'error', 'message' => __('messages.wallet_not_found_or_unauthorized')], 404);
+                }
 
-            if ($wallet->currency_code !== 'VND') {
-                return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_vnd_only')], 400);
+                $sourceType = $validated['source_type'] ?? 'manual';
+                $txType = $validated['type'];
+                if ($txType === 'expense' && $sourceType === 'manual' && $wallet->type !== 'cash') {
+                    if (empty($validated['payee_id'])) {
+                        return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công qua ví ngân hàng hoặc ví điện tử bắt buộc phải có người hưởng thụ.'], 400);
+                    }
+                }
+
+                if ($sourceType === 'manual' && in_array($wallet->type, ['bank', 'ewallet'])) {
+                    if (!empty($validated['category_id'])) {
+                        $category = DB::table('categories')->where('id', $validated['category_id'])->first();
+                        if ($category && $category->type === 'income') {
+                            return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_no_income_category')], 400);
+                        }
+                    }
+                }
+
+                if ($wallet->currency_code !== 'VND') {
+                    return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_vnd_only')], 400);
+                }
             }
  
             $transaction = $this->transactionService->createTransaction($userId, $validated, $request->file('attachment'), $request->file('attachments'));
@@ -173,8 +198,15 @@ class TransactionController extends Controller
                 return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
             }
 
+            if (is_string($request->input('splits'))) {
+                $decoded = json_decode($request->input('splits'), true);
+                if (is_array($decoded)) {
+                    $request->merge(['splits' => $decoded]);
+                }
+            }
+
             $validated = $request->validate([
-                'wallet_id'        => 'sometimes|required|uuid',
+                'wallet_id'        => 'nullable|uuid',
                 'category_id'      => 'nullable|uuid',
                 'payee_id'         => 'nullable|uuid|exists:saved_payees,id',
                 'type'             => 'sometimes|required|string|in:income,expense',
@@ -188,7 +220,10 @@ class TransactionController extends Controller
                 'attachment'       => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400',
                 'attachments'      => 'nullable|array',
                 'attachments.*'    => 'nullable|file|image|mimes:jpeg,png,jpg,gif|max:102400',
-                'source_type'      => 'nullable|string|in:manual,recurring,transfer,adjustment,import'
+                'source_type'      => 'nullable|string|in:manual,recurring,transfer,adjustment,import',
+                'splits'           => 'nullable|array|min:2',
+                'splits.*.wallet_id'=> 'required_with:splits|uuid',
+                'splits.*.amount'  => 'required_with:splits|numeric|min:1000',
             ]);
 
             if (isset($validated['title'])) {
@@ -203,33 +238,50 @@ class TransactionController extends Controller
                 return response()->json(['status' => 'error', 'message' => __('messages.transaction_not_found_or_unauthorized')], 404);
             }
 
-            $walletId = $validated['wallet_id'] ?? $existingTx->wallet_id;
-            $wallet = DB::table('wallets')->where('id', $walletId)->where('user_id', $userId)->first();
-            if (!$wallet) {
-                return response()->json(['status' => 'error', 'message' => __('messages.wallet_not_found_or_unauthorized')], 404);
-            }
+            $isNewSplit = isset($validated['splits']) && is_array($validated['splits']) && count($validated['splits']) > 1;
 
-            $sourceType = $validated['source_type'] ?? $existingTx->source_type ?? 'manual';
-            $txType = $validated['type'] ?? $existingTx->type;
-            if ($txType === 'expense' && $sourceType === 'manual' && $wallet->type !== 'cash') {
-                $payeeId = $validated['payee_id'] ?? $existingTx->payee_id;
-                if (empty($payeeId)) {
-                    return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công qua ví ngân hàng hoặc ví điện tử bắt buộc phải có người hưởng thụ.'], 400);
-                }
-            }
-
-            if ($sourceType === 'manual' && in_array($wallet->type, ['bank', 'ewallet'])) {
-                $categoryId = array_key_exists('category_id', $validated) ? $validated['category_id'] : $existingTx->category_id;
-                if (!empty($categoryId)) {
-                    $category = DB::table('categories')->where('id', $categoryId)->first();
-                    if ($category && $category->type === 'income') {
-                        return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_no_income_category')], 400);
+            if ($isNewSplit) {
+                // Kiểm tra các ví trong splits mới
+                foreach ($validated['splits'] as $splitItem) {
+                    $w = DB::table('wallets')->where('id', $splitItem['wallet_id'])->where('user_id', $userId)->whereNull('deleted_at')->first();
+                    if (!$w) {
+                        return response()->json(['status' => 'error', 'message' => 'Ví trong danh sách kết hợp không hợp lệ hoặc không thuộc quyền sở hữu của bạn.'], 404);
+                    }
+                    if ($w->currency_code !== 'VND') {
+                        return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_vnd_only')], 400);
                     }
                 }
-            }
+            } else {
+                if (isset($validated['wallet_id']) || !$existingTx->is_split) {
+                    $walletId = $validated['wallet_id'] ?? $existingTx->wallet_id;
+                    $wallet = DB::table('wallets')->where('id', $walletId)->where('user_id', $userId)->whereNull('deleted_at')->first();
+                    if (!$wallet) {
+                        return response()->json(['status' => 'error', 'message' => __('messages.wallet_not_found_or_unauthorized')], 404);
+                    }
 
-            if ($wallet->currency_code !== 'VND') {
-                return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_vnd_only')], 400);
+                    $sourceType = $validated['source_type'] ?? $existingTx->source_type ?? 'manual';
+                    $txType = $validated['type'] ?? $existingTx->type;
+                    if ($txType === 'expense' && $sourceType === 'manual' && $wallet->type !== 'cash') {
+                        $payeeId = $validated['payee_id'] ?? $existingTx->payee_id;
+                        if (empty($payeeId)) {
+                            return response()->json(['status' => 'error', 'message' => 'Giao dịch thủ công qua ví ngân hàng hoặc ví điện tử bắt buộc phải có người hưởng thụ.'], 400);
+                        }
+                    }
+
+                    if ($sourceType === 'manual' && in_array($wallet->type, ['bank', 'ewallet'])) {
+                        $categoryId = array_key_exists('category_id', $validated) ? $validated['category_id'] : $existingTx->category_id;
+                        if (!empty($categoryId)) {
+                            $category = DB::table('categories')->where('id', $categoryId)->first();
+                            if ($category && $category->type === 'income') {
+                                return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_no_income_category')], 400);
+                            }
+                        }
+                    }
+
+                    if ($wallet->currency_code !== 'VND') {
+                        return response()->json(['status' => 'error', 'message' => __('messages.manual_transaction_vnd_only')], 400);
+                    }
+                }
             }
  
             $transaction = $this->transactionService->updateTransaction($id, $userId, $validated, $request->file('attachment'), $request->file('attachments'));

@@ -47,6 +47,8 @@ class WalletService {
                 'color'         => $data['color'] ?? null,
                 'is_hidden'     => $data['is_hidden'] ?? false,
                 'currency_code' => $currencyCode,
+                'minimum_balance' => $data['minimum_balance'] ?? null,
+                'is_minimum_balance_alert_enabled' => $data['is_minimum_balance_alert_enabled'] ?? true,
             ]);
 
             // 2. Chọc sang bảng wallet_balances găm số dư khả dụng ban đầu
@@ -128,9 +130,17 @@ class WalletService {
                 throw new \Exception(__('messages.target_wallet_not_found'));
             }
 
-            // 2. Lock bảng số dư để tránh race condition (ghi đè số dư nếu có 2 giao dịch cùng lúc)
-            $fromBalance = DB::table('wallet_balances')->where('wallet_id', $fromWalletId)->lockForUpdate()->first();
-            $toBalance = DB::table('wallet_balances')->where('wallet_id', $toWalletId)->lockForUpdate()->first();
+            // 2. Lock bảng số dư để tránh race condition theo thứ tự ID tăng dần (chống Deadlock)
+            $sortedWalletIds = [$fromWalletId, $toWalletId];
+            sort($sortedWalletIds);
+
+            $balances = [];
+            foreach ($sortedWalletIds as $wId) {
+                $balances[$wId] = DB::table('wallet_balances')->where('wallet_id', $wId)->lockForUpdate()->first();
+            }
+
+            $fromBalance = $balances[$fromWalletId];
+            $toBalance = $balances[$toWalletId];
 
             if (!$fromBalance) {
                 throw new \Exception(__('messages.source_wallet_balance_not_found'));

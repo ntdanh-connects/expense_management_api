@@ -55,6 +55,8 @@ class WalletController extends Controller {
                 'color'             => 'nullable|string',
                 'is_hidden'         => 'nullable|boolean',
                 'currency_code'     => 'nullable|string|in:VND',
+                'minimum_balance'   => 'nullable|numeric|min:0',
+                'is_minimum_balance_alert_enabled' => 'nullable|boolean',
             ]);
 
             $wallet = $this->walletService->createNewWallet($userId, $validated);
@@ -85,7 +87,9 @@ class WalletController extends Controller {
                 'icon'          => 'nullable|string',
                 'color'         => 'nullable|string',
                 'is_hidden'     => 'nullable|boolean',
-                'currency_code' => 'sometimes|required|string|in:VND'
+                'currency_code' => 'sometimes|required|string|in:VND',
+                'minimum_balance'   => 'nullable|numeric|min:0',
+                'is_minimum_balance_alert_enabled' => 'nullable|boolean',
             ]);
 
             $wallet = $this->walletService->updateWallet($id, $userId, $validated);
