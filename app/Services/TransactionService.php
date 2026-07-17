@@ -810,10 +810,19 @@ class TransactionService
 
             } else {
                 $newWalletId = $data['wallet_id'] ?? $transaction->wallet_id;
+                if (empty($newWalletId)) {
+                    throw new \Exception("Yêu cầu chọn một ví thanh toán cho giao dịch đơn ví.");
+                }
                 $newWallet = DB::table('wallets')->where('id', $newWalletId)->first();
+                if (!$newWallet) {
+                    throw new \Exception("Không tìm thấy ví thanh toán được chọn.");
+                }
                 $newWalletCurrency = $newWallet->currency_code ?? 'VND';
 
                 $newAmount = isset($data['amount']) ? (float)$data['amount'] : (float)$transaction->amount;
+                if ($newAmount <= 0) {
+                    throw new \Exception("Số tiền giao dịch không hợp lệ.");
+                }
 
                 if (isset($data['exchange_rate'])) {
                     $newRate = (float) $data['exchange_rate'];

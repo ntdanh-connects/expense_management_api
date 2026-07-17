@@ -73,6 +73,31 @@ class WalletService {
             throw new \Exception(__('messages.wallet_unauthorized', ['wUid' => $wUid, 'rUid' => $userId]));
         }
 
+        $oldAlertEnabled = (bool) $wallet->is_minimum_balance_alert_enabled;
+        $newAlertEnabled = isset($data['is_minimum_balance_alert_enabled']) ? (bool) $data['is_minimum_balance_alert_enabled'] : $oldAlertEnabled;
+        
+        $balance = DB::table('wallet_balances')->where('wallet_id', $walletId)->value('available_balance') ?? 0.00;
+        $shouldResetAlert = false;
+
+        if (!$oldAlertEnabled && $newAlertEnabled) {
+            $shouldResetAlert = true;
+        }
+
+        if (isset($data['is_minimum_balance_alert_enabled']) && !$data['is_minimum_balance_alert_enabled']) {
+            $shouldResetAlert = true;
+        }
+
+        if (array_key_exists('minimum_balance', $data)) {
+            $newMin = $data['minimum_balance'];
+            if ($newMin === null || (float)$balance >= (float)$newMin) {
+                $shouldResetAlert = true;
+            }
+        }
+
+        if ($shouldResetAlert) {
+            $data['last_alert_sent_at'] = null;
+        }
+
         $wallet->update($data);
 
         // 🔥 Gắn thêm số dư hiện tại từ bảng wallet_balances để Frontend không bị mất số dư (về 0đ) khi cập nhật!

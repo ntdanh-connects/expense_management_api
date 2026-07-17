@@ -94,7 +94,11 @@ class AIHabitAnalysisService
             $aiInsight = "Hôm nay bạn không phát sinh khoản chi tiêu nào. Một ngày tuyệt vời để bảo toàn ngân sách của bạn!";
         }
 
-        $this->saveAnalysis($userId, 'daily', $analysisDateStr, $periodRange, $baselineAmount, $actualAmount, $diffAmount, $percentChange, $status, $aiInsight);
+        if ($aiInsight && !str_starts_with($aiInsight, 'Lỗi')) {
+            $this->saveAnalysis($userId, 'daily', $analysisDateStr, $periodRange, $baselineAmount, $actualAmount, $diffAmount, $percentChange, $status, $aiInsight);
+        } else {
+            Log::warning("Bỏ qua lưu phân tích daily cho user {$userId} do lỗi AI: {$aiInsight}");
+        }
     }
 
     /**
@@ -202,7 +206,11 @@ class AIHabitAnalysisService
 
         $aiInsight = $this->callGemini($prompt, $systemInstruction);
 
-        $this->saveAnalysis($userId, 'monthly', $analysisDateStr, $periodRange, $baselineAmount, $actualAmount, $diffAmount, $percentChange, $status, $aiInsight);
+        if ($aiInsight && !str_starts_with($aiInsight, 'Lỗi')) {
+            $this->saveAnalysis($userId, 'monthly', $analysisDateStr, $periodRange, $baselineAmount, $actualAmount, $diffAmount, $percentChange, $status, $aiInsight);
+        } else {
+            Log::warning("Bỏ qua lưu phân tích monthly cho user {$userId} do lỗi AI: {$aiInsight}");
+        }
     }
 
     /**
@@ -279,7 +287,11 @@ class AIHabitAnalysisService
 
         $aiInsight = $this->callGemini($prompt, $systemInstruction);
 
-        $this->saveAnalysis($userId, 'yearly', $analysisDateStr, $periodRange, $baselineAmount, $actualAmount, $diffAmount, $percentChange, $status, $aiInsight);
+        if ($aiInsight && !str_starts_with($aiInsight, 'Lỗi')) {
+            $this->saveAnalysis($userId, 'yearly', $analysisDateStr, $periodRange, $baselineAmount, $actualAmount, $diffAmount, $percentChange, $status, $aiInsight);
+        } else {
+            Log::warning("Bỏ qua lưu phân tích yearly cho user {$userId} do lỗi AI: {$aiInsight}");
+        }
     }
 
     /**
@@ -349,16 +361,37 @@ class AIHabitAnalysisService
             ]
         ];
 
-        try {
-            $response = Http::timeout(30)->post($url, $payload);
-            if ($response->successful()) {
-                $result = $response->json();
-                return $result['candidates'][0]['content']['parts'][0]['text'] ?? 'Không có phản hồi từ AI.';
+        $maxRetries = 3;
+        $retryDelay = 1000; // ms
+
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            try {
+                $response = Http::timeout(30)->post($url, $payload);
+                if ($response->successful()) {
+                    $result = $response->json();
+                    return $result['candidates'][0]['content']['parts'][0]['text'] ?? 'Không có phản hồi từ AI.';
+                }
+                
+                $status = $response->status();
+                if ($status === 429 || $status >= 500) {
+                    if ($attempt < $maxRetries) {
+                        Log::warning("Gemini API lỗi $status (Lần thử $attempt/$maxRetries). Đang chờ thử lại sau " . ($retryDelay / 1000) . "s...");
+                        usleep($retryDelay * 1000);
+                        $retryDelay *= 2; // exponential backoff
+                        continue;
+                    }
+                }
+                return 'Lỗi kết nối API: ' . $status;
+            } catch (\Throwable $e) {
+                Log::warning("Lỗi kết nối Gemini (Lần thử $attempt/$maxRetries): " . $e->getMessage());
+                if ($attempt < $maxRetries) {
+                    usleep($retryDelay * 1000);
+                    $retryDelay *= 2;
+                    continue;
+                }
+                return 'Lỗi khi gọi AI: ' . $e->getMessage();
             }
-            return 'Lỗi kết nối API: ' . $response->status();
-        } catch (\Throwable $e) {
-            Log::error("Lỗi gọi Gemini trong AIHabitAnalysisService: " . $e->getMessage());
-            return 'Lỗi khi gọi AI: ' . $e->getMessage();
         }
+        return 'Lỗi kết nối AI sau nhiều lần thử lại.';
     }
 }
