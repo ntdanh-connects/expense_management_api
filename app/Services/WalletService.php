@@ -88,8 +88,9 @@ class WalletService {
         }
 
         if (array_key_exists('minimum_balance', $data)) {
+            $oldMin = $wallet->minimum_balance;
             $newMin = $data['minimum_balance'];
-            if ($newMin === null || (float)$balance >= (float)$newMin) {
+            if ($oldMin != $newMin || $newMin === null || (float)$balance >= (float)$newMin) {
                 $shouldResetAlert = true;
             }
         }
