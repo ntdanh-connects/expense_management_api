@@ -82,7 +82,7 @@ class RecurringTransactionService
         }
 
         // 3. Tạo luật định kỳ
-        $nextRun = $data['next_run_at'] ?? now();
+        $nextRun = Carbon::parse($data['next_run_at'] ?? now())->timezone('Asia/Ho_Chi_Minh')->setTime(8, 0, 0);
         return RecurringRule::create([
             'user_id' => $userId,
             'wallet_id' => $data['wallet_id'],
@@ -529,7 +529,7 @@ class RecurringTransactionService
         $anchorDate = Carbon::parse($rule->start_date ?? $rule->created_at ?? $rule->next_run_at);
         $anchorDay = $anchorDate->day;
 
-        $nextRun = Carbon::parse($rule->next_run_at);
+        $nextRun = Carbon::parse($rule->next_run_at)->timezone('Asia/Ho_Chi_Minh');
         $interval = $rule->interval_value ?? 1;
 
         switch ($rule->frequency) {
@@ -552,6 +552,7 @@ class RecurringTransactionService
                 $nextRun->day(min($anchorDay, $nextRun->daysInMonth));
         }
 
+        $nextRun->setTime(8, 0, 0);
         $rule->next_run_at = $nextRun;
 
         // Nếu ngày chạy tiếp theo vượt quá ngày kết thúc, tắt hoạt động quy tắc định kỳ này

@@ -30,7 +30,10 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
-        $schedule->command('recurring:process')->everyMinute();
+        // Tự động thực thi giao dịch định kỳ đến hạn hàng ngày lúc 08:00 sáng
+        $schedule->command('recurring:process')->dailyAt('08:00')->timezone('Asia/Ho_Chi_Minh');
+        // Gửi thông báo nhắc nhở giao dịch định kỳ sắp tới hạn hàng ngày lúc 08:00 sáng
+        $schedule->command('notification:recurring-upcoming-reminder')->dailyAt('08:00')->timezone('Asia/Ho_Chi_Minh');
         // Nhắc nhở thêm chi tiêu hàng ngày vào lúc 21:00
         $schedule->command('notification:daily-reminder')->dailyAt('21:00');
         // Gửi báo cáo chi tiêu tuần vào lúc 20:00 ngày Chủ Nhật
