@@ -348,9 +348,9 @@ class WalletService {
     /**
      * Chuyển tiền P2P giữa 2 người dùng khác nhau trong hệ thống
      */
-    public function p2pTransfer(string $fromUserId, string $toUserId, string $fromWalletId, string $toWalletId, float $amount, ?string $notes = null, ?string $timezone = null, ?string $payeeId = null, bool $isQr = true, ?string $categoryId = null)
+    public function p2pTransfer(string $fromUserId, string $toUserId, string $fromWalletId, string $toWalletId, float $amount, ?string $notes = null, ?string $timezone = null, ?string $payeeId = null, bool $isQr = true, ?string $categoryId = null, ?string $transactionDate = null)
     {
-        return DB::transaction(function () use ($fromUserId, $toUserId, $fromWalletId, $toWalletId, $amount, $notes, $timezone, $payeeId, $isQr, $categoryId) {
+        return DB::transaction(function () use ($fromUserId, $toUserId, $fromWalletId, $toWalletId, $amount, $notes, $timezone, $payeeId, $isQr, $categoryId, $transactionDate) {
             if ($fromWalletId === $toWalletId) {
                 throw new \Exception(__('messages.wallets_same'));
             }
@@ -431,7 +431,7 @@ class WalletService {
                 'amount_in_user_currency' => $expenseAmountInUserCurrency,
                 'title'                   => $expenseTitle,
                 'notes'                   => $notes,
-                'transaction_date'        => now(),
+                'transaction_date'        => $transactionDate ? \Illuminate\Support\Carbon::parse($transactionDate) : now(),
                 'source_type'             => 'transfer',
                 'source_id'               => $transferId,
                 'timezone'                => $timezone,
@@ -453,7 +453,7 @@ class WalletService {
                 'amount_in_user_currency' => $incomeAmountInUserCurrency,
                 'title'                   => $incomeTitle,
                 'notes'                   => $notes,
-                'transaction_date'        => now(),
+                'transaction_date'        => $transactionDate ? \Illuminate\Support\Carbon::parse($transactionDate) : now(),
                 'source_type'             => 'transfer',
                 'source_id'               => $transferId,
                 'timezone'                => DB::table('user_preferences')->where('user_id', $toUserId)->value('timezone') ?? 'Asia/Ho_Chi_Minh',

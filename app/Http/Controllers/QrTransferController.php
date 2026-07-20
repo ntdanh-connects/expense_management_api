@@ -310,6 +310,7 @@ class QrTransferController extends Controller
             'timezone' => 'nullable|string|timezone',
             'is_qr' => 'nullable|boolean',
             'category_id' => 'nullable|uuid',
+            'transaction_date' => 'nullable|string',
             // Fields required for internal P2P
             'payee_user_id' => 'required_if:payee_type,internal|uuid',
             'to_wallet_id' => 'nullable|uuid',
@@ -404,7 +405,8 @@ class QrTransferController extends Controller
                     $validated['timezone'] ?? null,
                     $payee->id,
                     $isQr,
-                    $categoryId
+                    $categoryId,
+                    $validated['transaction_date'] ?? null
                 );
  
                 return response()->json([
