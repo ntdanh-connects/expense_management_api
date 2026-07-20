@@ -24,6 +24,7 @@ class WalletRepository extends BaseRepository implements WalletRepositoryInterfa
                 'wallets.id', 'wallets.name', 'wallets.type', 'wallets.icon', 
                 'wallets.color', 'wallets.is_hidden', 'wallets.created_at',
                 'wallets.currency_code', 'wallets.is_default_receiving',
+                'wallets.minimum_balance', 'wallets.is_minimum_balance_alert_enabled',
                 'wallet_balances.available_balance', 'wallet_balances.version'
             )
             ->orderBy('wallets.created_at', 'desc')

@@ -29,8 +29,6 @@ class FcmService
                 return null;
             }
 
-            $client = new GoogleClient();
-
             $jsonData = null;
 
             // 1. Kiểm tra xem credentials có phải là chuỗi JSON trực tiếp không
@@ -75,13 +73,59 @@ class FcmService
                 $jsonData['private_key'] = str_replace('\n', "\n", $jsonData['private_key']);
             }
 
-            $client->setAuthConfig($jsonData);
+            // 3. Lấy Access Token (dùng Google\Client nếu có, hoặc dùng pure PHP OpenSSL JWT nếu chưa có composer vendor)
+            if (class_exists(\Google\Client::class)) {
+                $client = new \Google\Client();
+                $client->setAuthConfig($jsonData);
+                $client->addScope('https://www.googleapis.com/auth/firebase.messaging');
+                $client->refreshTokenWithAssertion();
+                $accessTokenObj = $client->getAccessToken();
+                return $accessTokenObj['access_token'] ?? null;
+            }
 
-            $client->addScope('https://www.googleapis.com/auth/firebase.messaging');
-            $client->refreshTokenWithAssertion();
-            
-            $accessTokenObj = $client->getAccessToken();
-            return $accessTokenObj['access_token'] ?? null;
+            // Pure PHP Google Service Account OAuth2 JWT Assertion
+            $clientEmail = $jsonData['client_email'] ?? null;
+            $privateKey = $jsonData['private_key'] ?? null;
+
+            if (!$clientEmail || !$privateKey) {
+                Log::warning('FCM: Thiếu client_email hoặc private_key trong Firebase credentials JSON.');
+                return null;
+            }
+
+            $now = time();
+            $header = json_encode(['alg' => 'RS256', 'typ' => 'JWT']);
+            $payload = json_encode([
+                'iss' => $clientEmail,
+                'scope' => 'https://www.googleapis.com/auth/firebase.messaging',
+                'aud' => 'https://oauth2.googleapis.com/token',
+                'exp' => $now + 3600,
+                'iat' => $now,
+            ]);
+
+            $base64UrlHeader = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($header));
+            $base64UrlPayload = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($payload));
+            $signatureInput = $base64UrlHeader . '.' . $base64UrlPayload;
+
+            $signature = '';
+            if (!openssl_sign($signatureInput, $signature, $privateKey, 'SHA256')) {
+                Log::error('FCM: Lỗi ký chữ ký OpenSSL cho JWT Google Token.');
+                return null;
+            }
+
+            $base64UrlSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
+            $jwt = $signatureInput . '.' . $base64UrlSignature;
+
+            $response = Http::asForm()->post('https://oauth2.googleapis.com/token', [
+                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                'assertion' => $jwt,
+            ]);
+
+            if ($response->successful()) {
+                return $response->json('access_token');
+            }
+
+            Log::error('FCM: Lỗi yêu cầu OAuth2 Token từ Google API: ' . $response->body());
+            return null;
         } catch (\Exception $e) {
             Log::error('FCM: Lỗi khi lấy Access Token: ' . $e->getMessage());
             return null;
