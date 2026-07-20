@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Services\CategoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use App\Services\ActivityLogService;
 
 class CategoryController extends Controller
 {
@@ -97,6 +99,8 @@ class CategoryController extends Controller
 
             $category = $this->categoryService->createCategory($userId, $validated);
 
+            ActivityLogService::log('category.create', "Đã tạo danh mục mới: " . $category->name, $userId);
+
             return response()->json([
                 'status'  => 'success',
                 'message' => __('messages.create_category_success'),
@@ -137,6 +141,8 @@ class CategoryController extends Controller
 
             $category = $this->categoryService->updateCategory($id, $userId, $validated);
 
+            ActivityLogService::log('category.update', "Đã cập nhật thông tin danh mục: " . $category->name, $userId);
+
             return response()->json([
                 'status'  => 'success',
                 'message' => __('messages.update_category_success'),
@@ -168,7 +174,10 @@ class CategoryController extends Controller
                 ], 400);
             }
 
+            $categoryName = DB::table('categories')->where('id', $id)->value('name');
             $this->categoryService->deleteCategory($id, $userId);
+
+            ActivityLogService::log('category.delete', "Đã xóa danh mục: " . ($categoryName ?? 'Không xác định'), $userId);
 
             return response()->json([
                 'status'  => 'success',
@@ -205,7 +214,16 @@ class CategoryController extends Controller
                 'to_category_id'   => 'required|uuid'
             ]);
 
+            $fromName = DB::table('categories')->where('id', $validated['from_category_id'])->value('name');
+            $toName = DB::table('categories')->where('id', $validated['to_category_id'])->value('name');
+            
             $this->categoryService->mergeCategories($userId, $validated);
+
+            ActivityLogService::log(
+                'category.merge', 
+                "Đã gộp danh mục '" . ($fromName ?? 'cũ') . "' vào danh mục '" . ($toName ?? 'mới') . "'.", 
+                $userId
+            );
 
             return response()->json([
                 'status'  => 'success',

@@ -143,6 +143,9 @@ Route::middleware(['custom.auth'])->group(function () {
     Route::post('/savings/{id}/withdraw', [SavingsController::class, 'withdraw']);
     Route::delete('/savings/{id}', [SavingsController::class, 'destroy']);
 
+    // Nhật ký hoạt động hệ thống
+    Route::get('/activity-logs', [\App\Http\Controllers\ActivityLogController::class, 'index']);
+
     //Logut and logout all
     Route::post('/logout',[AuthController::class, 'logout']);
     Route::post('/logout-all',[AuthController::class, 'logoutAllDevices']);

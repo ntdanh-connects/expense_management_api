@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\WalletService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Services\ActivityLogService;
 
 class WalletController extends Controller {
     protected $walletService;
@@ -61,6 +62,8 @@ class WalletController extends Controller {
 
             $wallet = $this->walletService->createNewWallet($userId, $validated);
 
+            ActivityLogService::log('wallet.create', "Đã tạo ví mới: " . $wallet->name, $userId);
+
             return response()->json([
                 'status'  => 'success',
                 'message' => __('messages.create_wallet_success'),
@@ -94,6 +97,8 @@ class WalletController extends Controller {
 
             $wallet = $this->walletService->updateWallet($id, $userId, $validated);
 
+            ActivityLogService::log('wallet.update', "Đã cập nhật thông tin ví: " . $wallet->name, $userId);
+
             return response()->json([
                 'status'  => 'success',
                 'message' => __('messages.update_wallet_success'),
@@ -114,7 +119,10 @@ class WalletController extends Controller {
                 return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
             }
 
+            $walletName = DB::table('wallets')->where('id', $id)->value('name');
             $this->walletService->deleteWallet($id, $userId);
+
+            ActivityLogService::log('wallet.delete', "Đã xóa ví: " . ($walletName ?? 'Không xác định'), $userId);
 
             return response()->json([
                 'status'  => 'success',
@@ -147,6 +155,14 @@ class WalletController extends Controller {
             $validated['notes'] = strip_tags($validated['notes'] ?? '');
 
             $result = $this->walletService->transferMoney($userId, $validated);
+
+            $fromWalletName = DB::table('wallets')->where('id', $validated['from_wallet_id'])->value('name');
+            $toWalletName = DB::table('wallets')->where('id', $validated['to_wallet_id'])->value('name');
+            ActivityLogService::log(
+                'wallet.transfer', 
+                "Đã chuyển " . number_format($validated['amount']) . " VND từ ví " . ($fromWalletName ?? 'nguồn') . " sang ví " . ($toWalletName ?? 'đích') . ".", 
+                $userId
+            );
 
             return response()->json([
                 'status'  => 'success',
@@ -271,6 +287,8 @@ class WalletController extends Controller {
                     ->where('id', $id)
                     ->update(['is_default_receiving' => true]);
             });
+
+            ActivityLogService::log('wallet.set_default', "Đã đặt ví " . $wallet->name . " làm ví nhận tiền mặc định.", $userId);
 
             return response()->json([
                 'status'  => 'success',

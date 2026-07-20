@@ -9,6 +9,7 @@ use App\Models\TransactionAudit;
 use App\Services\ExchangeRateService;
 use App\Services\ImageUploadService;
 use Illuminate\Http\UploadedFile;
+use App\Services\ActivityLogService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -256,12 +257,18 @@ class TransactionService
                 }
 
                 // 9. Ghi log audit
-                TransactionAudit::create([
-                    'transaction_id' => $transactionId,
-                    'old_data' => null,
-                    'new_data' => $transaction->toArray(),
-                    'changed_by' => $userId
-                ]);
+                 TransactionAudit::create([
+                     'transaction_id' => $transactionId,
+                     'old_data' => null,
+                     'new_data' => $transaction->toArray(),
+                     'changed_by' => $userId
+                 ]);
+
+                 ActivityLogService::log(
+                     'transaction.create', 
+                     "Đã thêm giao dịch chi tiêu phân tách (Split): '" . $transaction->title . "' trị giá " . number_format($transaction->amount_in_user_currency) . " VND.",
+                     $userId
+                 );
 
                 // Bắn sự kiện TransactionSaved
                 event(new \App\Events\TransactionSaved($transaction));
@@ -588,6 +595,14 @@ class TransactionService
                 'new_data' => $transaction->toArray(),
                 'changed_by' => $userId
             ]);
+
+            $typeLabel = $transaction->type === 'expense' ? 'chi tiêu' : 'thu nhập';
+            $walletName = DB::table('wallets')->where('id', $transaction->wallet_id)->value('name');
+            ActivityLogService::log(
+                'transaction.create', 
+                "Đã thêm giao dịch " . $typeLabel . ": '" . $transaction->title . "' trị giá " . number_format($transaction->amount) . " " . $transaction->currency_code . " vào ví '" . ($walletName ?? 'không xác định') . "'.",
+                $userId
+            );
 
             // Bắn sự kiện TransactionSaved
             event(new \App\Events\TransactionSaved($transaction));
@@ -918,6 +933,12 @@ class TransactionService
                 'changed_by' => $userId
             ]);
 
+            ActivityLogService::log(
+                'transaction.update', 
+                "Đã chỉnh sửa thông tin giao dịch: '" . $transaction->title . "' (" . number_format($transaction->amount) . " " . $transaction->currency_code . ").",
+                $userId
+            );
+
             event(new \App\Events\TransactionSaved($transaction, $oldData));
 
             return $transaction->load('category', 'wallet', 'attachments', 'splits.wallet');
@@ -1082,6 +1103,12 @@ class TransactionService
                 'new_data' => ['deleted' => true],
                 'changed_by' => $userId
             ]);
+
+            ActivityLogService::log(
+                'transaction.delete', 
+                "Đã xóa giao dịch: '" . $transaction->title . "' (" . number_format($transaction->amount ?? 0) . " " . ($transaction->currency_code ?? 'VND') . ").",
+                $userId
+            );
 
             // Soft delete giao dịch
             $transaction->delete();

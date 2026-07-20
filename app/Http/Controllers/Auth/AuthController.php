@@ -14,6 +14,7 @@ use Illuminate\Support\Str;
 use App\Models\User;
 use App\Notifications\Auth\ResetPasswordNotification;
 use Exception;
+use App\Services\ActivityLogService;
 
 class AuthController extends Controller{
     protected $userService;
@@ -83,6 +84,8 @@ class AuthController extends Controller{
             ];
 
             $result = $this->userService->loginUser($creadential,$deviceData);
+
+            ActivityLogService::log('auth.login', 'Đăng nhập vào hệ thống thành công.', $result['user']->user_id);
 
             return response()->json([
                 'message'       => 'Đăng nhập thành công!',
@@ -180,6 +183,8 @@ class AuthController extends Controller{
                 ], 200);
             }
 
+            ActivityLogService::log('auth.login', 'Đăng nhập bằng tài khoản mạng xã hội thành công.', $result['user']->user_id);
+
             return response()->json([
                 'status'        => 'success',
                 'message'       => 'Đăng nhập mạng xã hội thành công!',
@@ -214,6 +219,8 @@ class AuthController extends Controller{
 
             $result = $this->userService->linkSocialAccount($validated['link_token'], $validated['password'], $deviceData);
 
+            ActivityLogService::log('auth.link_social', 'Liên kết tài khoản mạng xã hội thành công.', $result['user']->user_id);
+
             return response()->json([
                 'status'        => 'success',
                 'message'       => 'Liên kết và xác thực tài khoản thành công!',
@@ -239,10 +246,12 @@ class AuthController extends Controller{
                 $this->userService->logoutCurrentDevice($token);
             }
 
+            ActivityLogService::log('auth.logout', 'Đăng xuất khỏi thiết bị hiện tại.');
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'Đăng xuất thiết bị hiện tại thành công!'
-            ],200);
+            ], 200);
         }catch(\Throwable $e){
             return response()->json([
                 'status' => 'error',
@@ -259,12 +268,13 @@ class AuthController extends Controller{
 
             if($userId){
                 $this->userService->logoutAllDevices($userId);
+                ActivityLogService::log('auth.logout_all', 'Đăng xuất khỏi toàn bộ các thiết bị.', $userId);
             }
 
             return response()->json([
                 'status' => 'success',
                 'message' => 'Đăng xuất và thu hồi phiên đăng nhập trên toàn bộ thiết bị thành công!'
-            ],200);
+            ], 200);
         }catch(\Throwable $e){
             return response()->json([
                 'status'=>'error',
@@ -293,6 +303,8 @@ class AuthController extends Controller{
 
             $file = $request->file('avatar');
             $profile = $this->userService->updateAvatar($userId, $file);
+
+            ActivityLogService::log('user.update_avatar', 'Đã cập nhật ảnh đại diện mới.', $userId);
 
             return response()->json([
                 'status'  => 'success',
@@ -350,6 +362,8 @@ class AuthController extends Controller{
             }
 
             $profile = $this->userService->updateProfile($userId, $validated);
+
+            ActivityLogService::log('user.update_profile', 'Đã cập nhật thông tin cá nhân và thiết lập tài khoản.', $userId);
 
             return response()->json([
                 'status'  => 'success',
@@ -554,6 +568,8 @@ class AuthController extends Controller{
             );
             
             $this->userService->logoutAllDevices($userId);
+
+            ActivityLogService::log('auth.change_password', 'Đã đổi mật khẩu tài khoản và đăng xuất khỏi các thiết bị khác.', $userId);
 
             return response()->json([
                 'status'  => 'success',
