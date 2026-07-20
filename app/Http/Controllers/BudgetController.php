@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Services\BudgetService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use App\Services\ActivityLogService;
 
 class BudgetController extends Controller
 {
@@ -69,6 +71,13 @@ class BudgetController extends Controller
 
             $budget = $this->budgetService->createOrUpdateBudget($userId, $validated);
 
+            $categoryName = $budget->category_id ? DB::table('categories')->where('id', $budget->category_id)->value('name') : 'Tổng chi tiêu';
+            ActivityLogService::log(
+                'budget.create_update', 
+                "Đã thiết lập hạn mức ngân sách tháng " . $budget->month . "/" . $budget->year . " cho '" . $categoryName . "' là " . number_format($budget->limit_amount) . " VND.", 
+                $userId
+            );
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'Thiết lập hạn mức ngân sách thành công!',
@@ -92,7 +101,22 @@ class BudgetController extends Controller
                 return response()->json(['status' => 'error', 'message' => __('messages.user_id_required')], 400);
             }
 
+            $budgetInfo = DB::table('budgets')
+                ->leftJoin('categories', 'budgets.category_id', '=', 'categories.id')
+                ->where('budgets.id', $id)
+                ->select(['budgets.month', 'budgets.year', 'budgets.limit_amount', 'categories.name as category_name'])
+                ->first();
+
             $this->budgetService->deleteBudget($id, $userId);
+
+            if ($budgetInfo) {
+                $categoryName = $budgetInfo->category_name ?? 'Tổng chi tiêu';
+                ActivityLogService::log(
+                    'budget.delete', 
+                    "Đã xóa ngân sách tháng " . $budgetInfo->month . "/" . $budgetInfo->year . " cho '" . $categoryName . "'.", 
+                    $userId
+                );
+            }
 
             return response()->json([
                 'status' => 'success',
@@ -124,6 +148,12 @@ class BudgetController extends Controller
             ]);
 
             $copied = $this->budgetService->copyBudgets($userId, $validated);
+
+            ActivityLogService::log(
+                'budget.copy', 
+                "Đã sao chép cấu hình ngân sách từ tháng " . $validated['from_month'] . "/" . $validated['from_year'] . " sang tháng " . $validated['to_month'] . "/" . $validated['to_year'] . ".", 
+                $userId
+            );
 
             return response()->json([
                 'status' => 'success',

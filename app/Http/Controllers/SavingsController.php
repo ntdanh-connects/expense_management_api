@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use App\Services\ActivityLogService;
 
 class SavingsController extends Controller
 {
@@ -74,6 +75,8 @@ class SavingsController extends Controller
             $validated['status'] = 'active';
 
             $goal = SavingsGoal::create($validated);
+
+            ActivityLogService::log('savings.create', "Đã tạo mục tiêu tiết kiệm mới: '" . $goal->name . "' với mục tiêu " . number_format($goal->target_amount) . " VND.", $userId);
 
             return response()->json([
                 'status'  => 'success',
@@ -213,6 +216,8 @@ class SavingsController extends Controller
                 $query->orderBy('transaction_date', 'desc');
             }]);
 
+            ActivityLogService::log('savings.deposit', "Đã tích lũy " . number_format($amount) . " VND vào mục tiêu tiết kiệm: '" . $result['goal']->name . "'.", $userId);
+
             return response()->json([
                 'status'  => 'success',
                 'message' => 'Nạp tiền vào mục tiêu tiết kiệm thành công.',
@@ -317,6 +322,8 @@ class SavingsController extends Controller
                 $query->orderBy('transaction_date', 'desc');
             }]);
 
+            ActivityLogService::log('savings.withdraw', "Đã rút " . number_format($amount) . " VND từ mục tiêu tiết kiệm: '" . $result['goal']->name . "'.", $userId);
+
             return response()->json([
                 'status'  => 'success',
                 'message' => 'Rút tiền từ mục tiêu tiết kiệm thành công.',
@@ -352,7 +359,10 @@ class SavingsController extends Controller
                 ], 400);
             }
 
+            $goalName = $goal->name;
             $goal->delete();
+
+            ActivityLogService::log('savings.delete', "Đã xóa mục tiêu tiết kiệm: '" . $goalName . "'.", $userId);
 
             return response()->json([
                 'status'  => 'success',
