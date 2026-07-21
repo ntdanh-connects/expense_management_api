@@ -356,10 +356,11 @@ class UserService
             $accessToken = $token;
 
             if (!str_starts_with($token, 'gho_') && !str_starts_with($token, 'ghp_')) {
-                // Kiểm tra xem redirectUri có chứa tên miền Web (localhost hoặc onrender) không
+                // Kiểm tra xem redirectUri có chứa tên miền Web (localhost, onrender hoặc vercel.app) không
                 $isWebRedirect = $redirectUri && (
                     str_contains($redirectUri, 'localhost') || 
-                    str_contains($redirectUri, 'onrender.com')
+                    str_contains($redirectUri, 'onrender.com') ||
+                    str_contains($redirectUri, 'vercel.app')
                 );
                 // Nếu là Web, dùng bộ khóa github_web. Ngược lại dùng bộ khóa mặc định (Mobile)
                 $clientId = ($isWebRedirect && config('services.github_web.client_id'))
