@@ -56,7 +56,12 @@ class AutoAccumulateSavings extends Command
                 DB::transaction(function () use ($userId, $goal, $amount, $sourceWalletId, $notes) {
                     // Lock goal row
                     $lockedGoal = SavingsGoal::where('id', $goal->id)->lockForUpdate()->first();
-                    if ($lockedGoal->status !== 'active') {
+                    if (!$lockedGoal || $lockedGoal->status !== 'active') {
+                        return;
+                    }
+
+                    // Re-check isDue under row lock to prevent duplicate runs on the same day
+                    if (!$this->isDue($lockedGoal)) {
                         return;
                     }
 
@@ -144,13 +149,15 @@ class AutoAccumulateSavings extends Command
             ->where('type', 'deposit')
             ->where('notes', 'like', 'Tích lũy tự động%');
 
+        $now = now()->timezone('Asia/Ho_Chi_Minh');
+
         switch ($frequency) {
             case 'daily':
-                return !$query->where('transaction_date', '>=', now()->startOfDay())->exists();
+                return !$query->where('transaction_date', '>=', $now->copy()->startOfDay())->exists();
             case 'weekly':
-                return !$query->where('transaction_date', '>=', now()->subDays(7)->startOfDay())->exists();
+                return !$query->where('transaction_date', '>=', $now->copy()->subDays(7)->startOfDay())->exists();
             case 'monthly':
-                return !$query->where('transaction_date', '>=', now()->subDays(30)->startOfDay())->exists();
+                return !$query->where('transaction_date', '>=', $now->copy()->subDays(30)->startOfDay())->exists();
             default:
                 return false;
         }
